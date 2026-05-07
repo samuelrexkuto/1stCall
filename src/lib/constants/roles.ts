@@ -1,0 +1,26 @@
+export const STANDARD_ROLES = [
+  "Labourer",
+  "General Labourer",
+  "CSCS Labourer",
+  "Skilled Labourer",
+  "Forklift Driver",
+  "Warehouse Operative",
+  "Event Crew",
+  "Driver",
+  "Site Cleaner",
+  "Gateman",
+  "Traffic Marshal",
+  "Handyman",
+  "Painter",
+  "Dryliner",
+  "Groundworker",
+  "Carpenter",
+  "Electrician",
+  "Plumber",
+  "Tutor",
+  "Football Coach",
+  "Security Officer",
+  "Admin Support",
+] as const;
+
+export type StandardRole = (typeof STANDARD_ROLES)[number];

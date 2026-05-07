@@ -1,0 +1,15 @@
+ALTER TABLE workers
+ADD COLUMN IF NOT EXISTS worker_type text,
+ADD COLUMN IF NOT EXISTS contractor_type text,
+ADD COLUMN IF NOT EXISTS specialist_area text,
+ADD COLUMN IF NOT EXISTS skill_tags text[] NOT NULL DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS languages_spoken text[] NOT NULL DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS insurance_verified boolean NOT NULL DEFAULT false,
+ADD COLUMN IF NOT EXISTS insurance_types text[] NOT NULL DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS enhanced_dbs boolean NOT NULL DEFAULT false,
+ADD COLUMN IF NOT EXISTS first_aid_certified boolean NOT NULL DEFAULT false,
+ADD COLUMN IF NOT EXISTS companies_house_verified boolean NOT NULL DEFAULT false,
+ADD COLUMN IF NOT EXISTS companies_house_number text,
+ADD COLUMN IF NOT EXISTS constructionline_member boolean NOT NULL DEFAULT false,
+ADD COLUMN IF NOT EXISTS qualification_label text,
+ADD COLUMN IF NOT EXISTS accreditations text[] NOT NULL DEFAULT '{}';

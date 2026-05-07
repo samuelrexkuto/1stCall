@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="96" viewBox="0 0 320 96" fill="none">
+  <rect width="320" height="96" rx="20" fill="#0F172A"/>
+  <path d="M44 24H68C82.3594 24 94 35.6406 94 50C94 64.3594 82.3594 76 68 76H44V24Z" fill="#F59E0B"/>
+  <path d="M58 38H70C76.6274 38 82 43.3726 82 50C82 56.6274 76.6274 62 70 62H58V38Z" fill="#FFF7ED"/>
+  <text x="116" y="44" fill="#F8FAFC" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Recruited</text>
+  <text x="116" y="68" fill="#CBD5E1" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="600">Dispatch</text>
+</svg>

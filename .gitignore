@@ -1,0 +1,29 @@
+node_modules
+node_modules/.cache
+.next
+.turbo
+
+# Browser automation profiles / session data
+automation/.whatsapp-profile/
+automation/**/.whatsapp-profile/
+automation/**/Default/
+automation/**/Code Cache/
+automation/**/GPUCache/
+automation/**/Service Worker/
+automation/**/IndexedDB/
+automation/**/Local Storage/
+automation/**/Session Storage/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# TypeScript / build cache
+tsconfig.tsbuildinfo
+.next/
+node_modules/
+
+# Env files
+.env
+.env.local
+.env.*.local

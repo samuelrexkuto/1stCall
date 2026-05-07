@@ -1,0 +1,362 @@
+.assistantShell {
+  display: grid;
+  gap: 1rem;
+}
+
+.assistantResults {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.simulatorPanel,
+.recommendedPanel {
+  border-radius: 26px;
+  border: 1px solid var(--rd-border);
+  background: var(--rd-bg-elevated);
+  padding: 1.1rem;
+}
+
+.simulatorPanel {
+  background: transparent;
+  box-shadow: none;
+}
+
+.recommendedPanel {
+  border: none;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.assistantHeader {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.assistantTitle {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.assistantDescription {
+  margin: 0;
+  color: var(--rd-text-muted);
+}
+
+.emptyState {
+  padding: 0.95rem 1rem;
+  border-radius: 14px;
+  border: 1px solid var(--rd-border);
+  background: var(--rd-surface-soft);
+  color: var(--rd-text-muted);
+}
+
+.recommendedSection {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.recommendedTitle {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.matchList {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.matchCard {
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: stretch;
+  padding: 0.75rem;
+  border-radius: 18px;
+  border: 1px solid var(--rd-border);
+  background: var(--rd-bg-elevated);
+  box-shadow: none;
+}
+
+.matchImageWrap {
+  position: relative;
+  min-height: 168px;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--rd-surface-soft);
+}
+
+.matchImage {
+  width: 100%;
+  height: 100%;
+  min-height: 168px;
+  object-fit: cover;
+  display: block;
+}
+
+.matchAvatar {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  width: 50px;
+  height: 50px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 3px solid rgba(255, 255, 255, 0.92);
+  background: var(--rd-bg-elevated);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.matchAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.matchBadge {
+  position: absolute;
+  left: 1rem;
+  top: 1rem;
+  max-width: calc(100% - 2rem);
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #111827;
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.matchBody {
+  min-width: 0;
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+}
+
+.matchTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.matchEyebrow {
+  color: var(--rd-text-soft);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.matchName {
+  margin: 0.1rem 0 0;
+  color: var(--rd-text);
+  font-size: 1rem;
+  line-height: 1.1;
+}
+
+.matchMeta {
+  margin-top: 0.18rem;
+  font-size: 0.9rem;
+  color: var(--rd-text-muted);
+}
+
+.matchScore {
+  flex: 0 0 auto;
+  text-align: right;
+  color: var(--rd-text);
+}
+
+.matchScore strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.matchDistance {
+  color: var(--rd-text-muted);
+  font-size: 0.82rem;
+}
+
+.matchSummary {
+  margin: 0;
+  color: var(--rd-text-muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.matchStats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.matchStatLabel {
+  display: block;
+  color: var(--rd-text-soft);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.matchStatValue {
+  display: block;
+  margin-top: 0.12rem;
+  color: var(--rd-text);
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.matchActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.mobileMatchCarousel {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .recommendedSection {
+    gap: 0.72rem;
+  }
+
+  .matchList {
+    display: none;
+  }
+
+  .mobileMatchCarousel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .mobileMatchRow {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 2px 4px;
+    scrollbar-width: none;
+  }
+
+  .mobileMatchRow::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobileMatchCard {
+    flex: 0 0 calc(50% - 6px);
+    min-width: calc(50% - 6px);
+    scroll-snap-align: start;
+    display: grid;
+    overflow: hidden;
+    padding: 0;
+    border-radius: 18px;
+    border: 1px solid var(--rd-border);
+    background: var(--rd-bg-elevated);
+    color: var(--rd-text);
+    text-align: left;
+    font: inherit;
+    box-shadow: none;
+    cursor: pointer;
+  }
+
+  .mobileMatchImage {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    display: block;
+    background: var(--rd-surface-soft);
+  }
+
+  .mobileMatchBody {
+    display: flex;
+    flex-direction: column;
+    gap: 0.24rem;
+    padding: 0.62rem;
+    min-width: 0;
+  }
+
+  .mobileMatchName {
+    font-size: 0.86rem;
+    font-weight: 800;
+    line-height: 1.18;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobileMatchMeta {
+    color: var(--rd-text-muted);
+    font-size: 0.74rem;
+    line-height: 1.22;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobileMatchTag {
+    width: fit-content;
+    max-width: 100%;
+    margin-top: 0.1rem;
+    padding: 0.18rem 0.42rem;
+    border-radius: 999px;
+    background: var(--rd-control-active-bg);
+    color: var(--rd-text);
+    font-size: 0.68rem;
+    font-weight: 800;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .matchCard {
+    grid-template-columns: 1fr;
+  }
+
+  .matchTop {
+    flex-direction: column;
+  }
+
+  .matchScore {
+    text-align: left;
+  }
+
+  :global(.workforce-dispatch-ai-page) .assistantResults,
+  :global(.workforce-dispatch-ai-page) .recommendedPanel,
+  :global(.workforce-dispatch-ai-page) .recommendedSection {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    box-sizing: border-box;
+  }
+
+  :global(.workforce-dispatch-ai-page) .mobileMatchCarousel,
+  :global(.workforce-dispatch-ai-page) .mobileMatchRow {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  :global(.workforce-dispatch-ai-page) .mobileMatchCarousel {
+    overflow-x: hidden;
+  }
+
+  :global(.workforce-dispatch-ai-page) .mobileMatchCard {
+    max-width: none;
+    overflow: visible;
+    border-radius: 0;
+    border: none;
+    background: transparent;
+  }
+
+  :global(.workforce-dispatch-ai-page) .mobileMatchImage {
+    border-radius: 20px;
+  }
+
+  :global(.workforce-dispatch-ai-page) .mobileMatchBody {
+    padding: 10px 2px 0;
+    background: transparent;
+  }
+}
