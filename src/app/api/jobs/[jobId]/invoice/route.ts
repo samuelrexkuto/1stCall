@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
-import { sendEmail } from "@/lib/email/sendEmail";
 import {
   buildInvoiceEmailHtml,
   formatCurrency,
@@ -190,33 +189,10 @@ export async function POST(
       if (!providerEmail) {
         return NextResponse.json({ error: "Provider email is required before an invoice can be sent." }, { status: 400 });
       }
-      const { error: sendError } = await sendEmail({
-        to: providerEmail,
-        subject,
-        text,
-        html,
-      });
-
-      if (sendError) {
-        return NextResponse.json({ error: sendError.message }, { status: 500 });
-      }
-
-      const { error: updateError } = await supabase
-        .from("jobs")
-        .update({
-          invoice_status: "sent",
-          invoice_send_date: invoiceSendDate || null,
-          invoice_due_date: invoiceDueDate || null,
-          invoice_last_sent_at: new Date().toISOString(),
-          invoice_notes: buildInvoiceMetadata(amount, notes),
-        })
-        .eq("id", jobId);
-
-      if (updateError) {
-        return NextResponse.json({ error: updateError.message }, { status: 500 });
-      }
-
-      return NextResponse.json({ ok: true, status: "sent" });
+      return NextResponse.json(
+        { error: "Invoice email sending is disabled because the Resend integration has been removed." },
+        { status: 501 },
+      );
     }
 
     return NextResponse.json({ error: "Unsupported invoice action." }, { status: 400 });

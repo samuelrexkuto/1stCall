@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const dispatchChannelSchema = z.enum(["whatsapp", "sms", "call", "email"]);
+export const dispatchChannelSchema = z.enum(["whatsapp", "sms", "call"]);
 
 const nullableNumberLike = z
   .union([z.number(), z.string().trim(), z.null(), z.undefined()])
