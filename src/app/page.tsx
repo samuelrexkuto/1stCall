@@ -8,9 +8,23 @@ import { loadProviderAccount } from "@/lib/provider-account";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { loadWorkersOverview, mapJobsToDispatchOptions } from "@/lib/workers";
 
+function createHomePageSupabaseClient() {
+  try {
+    return createAdminSupabaseClient();
+  } catch (error) {
+    console.warn("[home] Supabase is unavailable; rendering homepage with empty provider data.", {
+      error: error instanceof Error ? error.message : "Unknown Supabase configuration error.",
+      NEXT_PUBLIC_SUPABASE_URL: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+      SUPABASE_SERVICE_ROLE_KEY: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+      SUPABASE_SECRET_KEY: Boolean(process.env.SUPABASE_SECRET_KEY),
+    });
+    return null;
+  }
+}
+
 export default async function HomePage() {
   const currentUser = await getAppSessionUser();
-  const supabase = createAdminSupabaseClient();
+  const supabase = createHomePageSupabaseClient();
   const viewerProviderId = currentUser?.role === "job_provider" ? currentUser.providerId : undefined;
   const [jobsData, providersData, mapData, workersData, providerAccount] = await Promise.all([
     loadJobsOverview({
@@ -25,6 +39,10 @@ export default async function HomePage() {
       broadcast_status: "",
     }, { viewerProviderId }).catch(() => null),
     (async () => {
+      if (!supabase) {
+        return [] as Array<{ id: string; name: string }>;
+      }
+
       try {
         const baseQuery = supabase
           .from("job_providers")
