@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { deriveWhatsappNumber } from "@/lib/phone";
+import { RESEND_NOT_CONFIGURED_REASON, sendEmail } from "@/lib/email/sendEmail";
 import { sendCallDispatch } from "@/lib/dispatch/call";
 import { sendSmsDispatch } from "@/lib/dispatch/sms";
 import { sendWhatsAppDispatch } from "@/lib/dispatch/providers/whatsapp";
@@ -18,7 +19,7 @@ import {
 const broadcastPayloadSchema = z.object({
   recipient_type: z.enum(["workers", "providers"]),
   recipient_ids: z.array(z.string().uuid()).min(1),
-  channels: z.array(z.enum(["whatsapp", "sms", "call"])).min(1),
+  channels: z.array(z.enum(["whatsapp", "sms", "call", "email"])).min(1),
   message_context: z.enum(["standard", "onboarding"]),
   alert_style: z.string().trim().min(1),
   message_preview: z.string().trim().min(1),
@@ -52,6 +53,53 @@ interface RecipientRow {
   email: string | null;
   phone: string | null;
   whatsapp_opt_in?: boolean | null;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function buildEmailContent(payload: BroadcastPayload) {
+  const subjectBase =
+    payload.message_context === "onboarding"
+      ? payload.recipient_type === "workers"
+        ? "Worker onboarding"
+        : "Provider onboarding"
+      : payload.job_context?.job_title
+        ? `${payload.alert_style}: ${payload.job_context.job_title}`
+        : payload.alert_style;
+
+  const text = [
+    payload.job_context?.provider_name ? `Client: ${payload.job_context.provider_name}` : null,
+    payload.job_context?.job_title ? `Job: ${payload.job_context.job_title}` : null,
+    payload.job_context?.role ? `Role: ${payload.job_context.role}` : null,
+    payload.job_context?.area || payload.job_context?.postcode
+      ? `Location: ${payload.job_context?.area ?? "-"} / ${payload.job_context?.postcode ?? "-"}`
+      : null,
+    payload.job_context?.start_date
+      ? `Start: ${payload.job_context.start_date} ${payload.job_context?.start_time ?? ""}`.trim()
+      : null,
+    payload.job_context?.pay_rate_display ? `Pay: ${payload.job_context.pay_rate_display}` : null,
+    payload.job_context?.short_description ? `Description: ${payload.job_context.short_description}` : null,
+    null,
+    payload.message_preview,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.6;">
+      <p style="margin: 0 0 16px;"><strong>${escapeHtml(subjectBase)}</strong></p>
+      <p style="white-space: pre-line; margin: 0;">${escapeHtml(payload.message_preview)}</p>
+    </div>
+  `;
+
+  return { subject: subjectBase, html, text };
 }
 
 async function loadRecipients(payload: BroadcastPayload) {
@@ -92,6 +140,100 @@ async function loadRecipients(payload: BroadcastPayload) {
     phone: typeof row.phone === "string" ? row.phone : null,
     whatsapp_opt_in: true,
   })) satisfies RecipientRow[];
+}
+
+async function sendEmailChannel(payload: BroadcastPayload, recipients: RecipientRow[]) {
+  if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
+    console.warn("[email] Resend is disabled because RESEND_API_KEY or RESEND_FROM_EMAIL is missing.");
+    return {
+      channel: "email",
+      ok: true,
+      skipped: true,
+      message: RESEND_NOT_CONFIGURED_REASON,
+      sent: 0,
+      failed: 0,
+      failure_reasons: [],
+      recipient_results: recipients.map((recipient) => ({
+        recipientId: recipient.id,
+        name: recipient.name,
+        email: recipient.email,
+        ok: false,
+        skipped: true,
+        reason: RESEND_NOT_CONFIGURED_REASON,
+      })),
+    };
+  }
+
+  const emailContent = buildEmailContent(payload);
+  const recipientResults = await Promise.all(
+    recipients.map(async (recipient) => {
+      if (!recipient.email) {
+        return {
+          recipientId: recipient.id,
+          name: recipient.name,
+          email: null,
+          ok: false,
+          reason: "Recipient does not have an email address.",
+        };
+      }
+
+      try {
+        const { error } = await sendEmail({
+          to: recipient.email,
+          subject: emailContent.subject,
+          html: emailContent.html,
+          text: emailContent.text,
+        });
+
+        if (error) {
+          return {
+            recipientId: recipient.id,
+            name: recipient.name,
+            email: recipient.email,
+            ok: false,
+            reason: error.message,
+          };
+        }
+
+        return {
+          recipientId: recipient.id,
+          name: recipient.name,
+          email: recipient.email,
+          ok: true,
+          reason: null,
+        };
+      } catch (error) {
+        return {
+          recipientId: recipient.id,
+          name: recipient.name,
+          email: recipient.email,
+          ok: false,
+          reason: error instanceof Error ? error.message : "Email send failed.",
+        };
+      }
+    }),
+  );
+
+  const sent = recipientResults.filter((result) => result.ok).length;
+  const failedRows = recipientResults.filter((result) => !result.ok);
+  const failureMap = failedRows.reduce((acc, row) => {
+    const key = row.reason ?? "Unknown error";
+    acc.set(key, (acc.get(key) ?? 0) + 1);
+    return acc;
+  }, new Map<string, number>());
+
+  return {
+    channel: "email",
+    ok: failedRows.length === 0,
+    message:
+      failedRows.length === 0
+        ? `Email sent to ${sent} recipient(s).`
+        : `Email sent to ${sent} recipient(s) with ${failedRows.length} failure(s).`,
+    sent,
+    failed: failedRows.length,
+    failure_reasons: [...failureMap.entries()].map(([reason, count]) => ({ reason, count })),
+    recipient_results: recipientResults,
+  };
 }
 
 async function sendWhatsAppChannel(payload: BroadcastPayload, recipients: RecipientRow[]) {
@@ -245,6 +387,11 @@ export async function POST(request: Request) {
     const results = [];
 
     for (const channel of payload.channels) {
+      if (channel === "email") {
+        results.push(await sendEmailChannel(payload, recipients));
+        continue;
+      }
+
       if (channel === "whatsapp") {
         results.push(await sendWhatsAppChannel(payload, recipients));
         continue;
