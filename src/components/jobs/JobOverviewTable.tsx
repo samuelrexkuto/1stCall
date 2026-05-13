@@ -3,10 +3,24 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { RecommendedWorkerMatchCard } from "@/components/job-provider/RecommendedWorkerMatchCard";
+import {
+  CalendarIcon,
+  CheckCircledIcon,
+  ClockIcon,
+  EnvelopeClosedIcon,
+  FileTextIcon,
+  IdCardIcon,
+  MobileIcon,
+  PersonIcon,
+  ReaderIcon,
+  SewingPinIcon,
+} from "@radix-ui/react-icons";
+import { Box, Checkbox, ScrollArea, Table, Tabs } from "@radix-ui/themes";
 import { InvoiceEmailModal } from "@/components/jobs/InvoiceEmailModal";
 import { BroadcastModal, type BroadcastJobOption } from "@/components/messaging/BroadcastModal";
 import { Modal } from "@/components/ui/Modal";
+import { WorkerGridCard } from "@/components/workforce/WorkerGridCard";
+import { WorkerProfileModal } from "@/components/workers/WorkerProfileModal";
 import { getInvoiceReminder } from "@/lib/invoices/getInvoiceReminder";
 import { resolveRequestedWorkforce, type NormalisedRequestedWorkforce } from "@/lib/jobs/normaliseRequestedWorkforce";
 import { formatLocation } from "@/lib/jobs/mergeRequestedWorkforce";
@@ -22,12 +36,12 @@ import {
   normaliseBroadcastStatus,
   type BroadcastStatus,
 } from "@/lib/dispatch/broadcast-status-constants";
-import {
-  getPaymentReliabilityLabel,
-  type PlatformBackedStatus,
-  type ProviderPaymentReliabilityStatus,
+import type {
+  PlatformBackedStatus,
+  ProviderPaymentReliabilityStatus,
 } from "@/lib/provider-trust";
 import { normaliseStringList } from "@/lib/stringLists";
+import type { WorkerOverviewRow } from "@/lib/workers/types";
 
 export interface MatchingWorker {
   id?: string;
@@ -246,6 +260,154 @@ function normaliseToArray(value: unknown) {
   return normaliseStringList(value);
 }
 
+function formatPercentMatch(value: number | null | undefined) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "Match pending";
+  const numeric = Number(value);
+  const percentage = numeric > 0 && numeric <= 1 ? numeric * 100 : numeric;
+  return `${Math.round(percentage)}% match`;
+}
+
+function buildFallbackAvatar(label: string) {
+  const initials = label
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("") || "RD";
+
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="420" viewBox="0 0 600 420">
+      <rect width="600" height="420" fill="#eff6ff"/>
+      <circle cx="300" cy="166" r="74" fill="#dbeafe"/>
+      <path d="M150 360c35-74 90-112 150-112s115 38 150 112" fill="#dbeafe"/>
+      <text x="300" y="192" text-anchor="middle" fill="#0f172a" font-size="76" font-family="Arial, sans-serif" font-weight="700">${initials}</text>
+    </svg>`,
+  )}`;
+}
+
+function getMatchingWorkerId(worker: MatchingWorker) {
+  return worker.worker_id || worker.id || worker.workerId || "";
+}
+
+function getDisplayName(worker: MatchingWorker | NormalisedRequestedWorkforce | AcceptedWorkforceRow) {
+  const anyWorker = worker as any;
+  return (
+    anyWorker.company_name ||
+    anyWorker.business_name ||
+    anyWorker.full_name ||
+    anyWorker.name ||
+    anyWorker.worker?.name ||
+    "Unnamed contractor"
+  );
+}
+
+function getAvatar(worker: MatchingWorker | NormalisedRequestedWorkforce | AcceptedWorkforceRow) {
+  const anyWorker = worker as any;
+  const name = getDisplayName(worker);
+  return (
+    anyWorker.avatar_url ||
+    anyWorker.image_url ||
+    anyWorker.profile_image ||
+    anyWorker.card_image_url ||
+    anyWorker.profile_image_url ||
+    anyWorker.avatarUrl ||
+    anyWorker.worker?.avatar_url ||
+    buildFallbackAvatar(name)
+  );
+}
+
+function getWorkerRole(worker: MatchingWorker | NormalisedRequestedWorkforce | AcceptedWorkforceRow) {
+  const anyWorker = worker as any;
+  return (
+    anyWorker.primary_trade ||
+    anyWorker.primaryRole ||
+    anyWorker.primary_role ||
+    anyWorker.role ||
+    anyWorker.trade ||
+    anyWorker.worker_type ||
+    anyWorker.workforceType ||
+    anyWorker.worker?.role ||
+    "General workforce"
+  );
+}
+
+function getAcceptedStatus(worker: NormalisedRequestedWorkforce | AcceptedWorkforceRow) {
+  const anyWorker = worker as any;
+  const status = anyWorker.assignment_status || anyWorker.dispatchStatus || anyWorker.dispatch_status;
+  return ["accepted", "confirmed", "selected_for_release", "released_to_client"].includes(status) ? "Accepted" : "Accepted";
+}
+
+function buildProfileWorkerFromMatch(worker: MatchingWorker): WorkerOverviewRow {
+  const name = getDisplayName(worker);
+  const imageUrl = getAvatar(worker);
+  const role = getWorkerRole(worker);
+
+  return {
+    worker_id: getMatchingWorkerId(worker) || worker.worker_id,
+    full_name: name,
+    phone: worker.phone,
+    whatsapp_number: null,
+    email: null,
+    primary_role: role,
+    skill_tags: worker.skill_tags ?? [],
+    workerType: worker.worker_type === "contractor" ? "contractor" : "tradesman",
+    contractorType: worker.contractor_type ?? null,
+    specialistArea: worker.specialist_area ?? null,
+    skillTag: role,
+    languagesSpoken: [],
+    avgResponseTimeLabel: null,
+    location_display: worker.location_display ?? ([worker.town, worker.postcode].filter(Boolean).join(" ") || null),
+    town: worker.town,
+    postcode: worker.postcode,
+    status: "active",
+    available_today: worker.available_today,
+    right_to_work: worker.right_to_work,
+    contract_signed: worker.contract_signed,
+    contract_status: null,
+    contract_signed_at: null,
+    onboarding_status: null,
+    id_document_uploaded: false,
+    cscs_uploaded: false,
+    portfolio_uploaded: false,
+    certificates_uploaded: false,
+    profileImageUrl: imageUrl,
+    cardImageUrl: imageUrl,
+    work_readiness: null,
+    priority_tier: worker.priority_tier,
+    whatsapp_opt_in: worker.whatsapp_opt_in,
+    expected_rate: 0,
+    reliability_score: 0,
+    created_at: "",
+    stathub: {
+      status: "insufficient",
+      overallScore: worker.site_score,
+      reliabilityScore: null,
+      siteConductScore: null,
+      workQualityScore: null,
+      internalScoreSnapshot: worker.site_score,
+      verifiedBookingsCount: worker.verified_bookings,
+      nextReleaseAt: null,
+    },
+    statHubMeta: {
+      verifiedCompletedJobsCount: worker.verified_bookings,
+      reviewedJobsCount: 0,
+      portfolioBackedJobsCount: 0,
+      repeatBookedCount: 0,
+      status: "insufficient",
+    },
+    performanceSummary: {},
+    portfolio: [],
+    credentialsSummary: [],
+    credentialsCompliance: {
+      cscsVerified: false,
+      rightToWorkVerified: worker.right_to_work,
+    },
+    clientFeedbackHighlights: [],
+    completed_jobs_count: worker.verified_bookings,
+    recent_completed_jobs: [],
+  };
+}
+
 function hasValue(values: string | string[] | null | undefined, target: string) {
   return normaliseToArray(values).some((item) => item.toLowerCase() === target.toLowerCase());
 }
@@ -350,10 +512,27 @@ function formatJobDuration(job: Pick<JobOverviewRow, "duration" | "start_date" |
   return `${formatDisplayDate(startDate)} to ${formatDisplayDate(endDate)}`;
 }
 
+function getDetailIcon(label: string) {
+  const normalized = label.toLowerCase();
+  if (normalized.includes("phone") || normalized.includes("mobile")) return <MobileIcon />;
+  if (normalized.includes("email")) return <EnvelopeClosedIcon />;
+  if (normalized.includes("area") || normalized.includes("postcode") || normalized.includes("location")) return <SewingPinIcon />;
+  if (normalized.includes("role") || normalized.includes("trade") || normalized.includes("worker") || normalized.includes("workforce")) return <PersonIcon />;
+  if (normalized.includes("date") || normalized.includes("duration")) return <CalendarIcon />;
+  if (normalized.includes("time") || normalized.includes("window")) return <ClockIcon />;
+  if (normalized.includes("invoice") || normalized.includes("payment")) return <FileTextIcon />;
+  if (normalized.includes("status") || normalized.includes("confirmed") || normalized.includes("compliance")) return <CheckCircledIcon />;
+  if (normalized.includes("skill") || normalized.includes("certificate") || normalized.includes("cscs") || normalized.includes("dbs")) return <IdCardIcon />;
+  return <ReaderIcon />;
+}
+
 function DetailField({ label, value }: { label: string; value: string | number | boolean | null | undefined }) {
   return (
     <div className="rd-detail-field">
-      <div className="rd-detail-label">{label}</div>
+      <div className="rd-detail-label">
+        <span className="rd-detail-label-icon" aria-hidden="true">{getDetailIcon(label)}</span>
+        <span>{label}</span>
+      </div>
       <div className="rd-detail-value">{formatDetailValue(value)}</div>
     </div>
   );
@@ -361,11 +540,13 @@ function DetailField({ label, value }: { label: string; value: string | number |
 
 function DetailGrid({
   fields,
+  className = "",
 }: {
   fields: Array<[string, string | number | boolean | null | undefined]>;
+  className?: string;
 }) {
   return (
-    <div className="rd-detail-grid">
+    <div className={`rd-detail-grid${className ? ` ${className}` : ""}`}>
       {fields.map(([label, value]) => (
         <DetailField key={label} label={label} value={value} />
       ))}
@@ -435,13 +616,6 @@ export function JobOverviewTable({
       current.includes(jobId)
         ? current.filter((id) => id !== jobId)
         : [...current, jobId],
-    );
-  }
-
-  function toggleSelectAll() {
-    setPageError("");
-    setSelectedIds((current) =>
-      current.length === jobs.length ? [] : jobs.map((job) => job.job_id),
     );
   }
 
@@ -683,7 +857,7 @@ export function JobOverviewTable({
         </div>
       ) : null}
 
-      <div style={{ overflowX: "auto" }}>
+      <div className="desktop-overview-table-shell" style={{ overflowX: "auto" }}>
         <table
           style={{
             width: "100%",
@@ -694,11 +868,21 @@ export function JobOverviewTable({
           <thead>
             <tr>
               <th style={{ textAlign: "left", padding: "0.75rem", borderBottom: "1px solid var(--rd-border)" }}>
-                <input
-                  type="checkbox"
-                  checked={jobs.length > 0 && selectedIds.length === jobs.length}
-                  onChange={toggleSelectAll}
+                <Checkbox
+                  checked={
+                    jobs.length > 0 && selectedIds.length === jobs.length
+                      ? true
+                      : selectedIds.length > 0
+                        ? "indeterminate"
+                        : false
+                  }
+                  onCheckedChange={(checked) => {
+                    setSelectedIds(checked === true ? jobs.map((job) => job.job_id) : []);
+                  }}
                   aria-label="Select all jobs"
+                  color="blue"
+                  variant="soft"
+                  size="2"
                 />
               </th>
               <th style={{ textAlign: "left", padding: "0.75rem", borderBottom: "1px solid var(--rd-border)" }}>Title</th>
@@ -735,11 +919,13 @@ export function JobOverviewTable({
               return (
               <tr key={job.job_id}>
                 <td style={{ padding: "0.75rem", borderBottom: "1px solid var(--rd-border)" }}>
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={selectedIds.includes(job.job_id)}
-                    onChange={() => toggleSelection(job.job_id)}
+                    onCheckedChange={() => toggleSelection(job.job_id)}
                     aria-label={`Select ${job.job_title}`}
+                    color="blue"
+                    variant="soft"
+                    size="2"
                   />
                 </td>
                 <td style={{ padding: "0.75rem", borderBottom: "1px solid var(--rd-border)" }}>
@@ -826,6 +1012,161 @@ export function JobOverviewTable({
         </table>
       </div>
 
+      <Box className="mobile-radix-table-shell">
+        <ScrollArea type="auto" scrollbars="horizontal" className="mobile-radix-table-scroll">
+          <Table.Root
+            variant="surface"
+            size="1"
+            layout="fixed"
+            className="mobile-radix-overview-table"
+          >
+            <Table.Header>
+              <Table.Row>
+                <Table.ColumnHeaderCell width="48px">
+                  <Checkbox
+                    checked={
+                      jobs.length > 0 && selectedIds.length === jobs.length
+                        ? true
+                        : selectedIds.length > 0
+                          ? "indeterminate"
+                          : false
+                    }
+                    onCheckedChange={(checked) => {
+                      setSelectedIds(checked === true ? jobs.map((job) => job.job_id) : []);
+                    }}
+                    aria-label="Select all jobs"
+                    color="blue"
+                    variant="soft"
+                    size="2"
+                  />
+                </Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell width="130px">Title</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell width="110px">Provider</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell width="90px">Area</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell width="88px">Postcode</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell width="105px">Start Date</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell width="82px">Required</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell width="110px">Confirmed</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell width="130px">Broadcast</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell width="95px">Payment</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell width="100px">Job Status</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell width="90px">Actions</Table.ColumnHeaderCell>
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
+              {jobs.map((job) => {
+                const workersConfirmed = Number(
+                  job.workersConfirmed ??
+                    job.workers_confirmed ??
+                    job.confirmed_workforce_count ??
+                    job.acceptedWorkforce?.length ??
+                    0,
+                );
+                const confirmedNames =
+                  job.confirmedWorkerNames ||
+                  job.confirmed_worker_names ||
+                  job.confirmed_workforce_names ||
+                  job.confirmedWorkforce?.map((worker) => worker.name).filter(Boolean) ||
+                  job.acceptedWorkforce?.map((worker) => worker.name).filter(Boolean) ||
+                  [];
+
+                return (
+                  <Table.Row key={job.job_id}>
+                    <Table.Cell>
+                      <Checkbox
+                        checked={selectedIds.includes(job.job_id)}
+                        onCheckedChange={() => toggleSelection(job.job_id)}
+                        aria-label={`Select ${job.job_title}`}
+                        color="blue"
+                        variant="soft"
+                        size="2"
+                      />
+                    </Table.Cell>
+                    <Table.RowHeaderCell>
+                      <button
+                        type="button"
+                        onClick={() => openJob(job)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          padding: 0,
+                          color: "var(--rd-text)",
+                          textDecoration: "underline",
+                          cursor: "pointer",
+                          font: "inherit",
+                        }}
+                      >
+                        {job.job_title}
+                      </button>
+                    </Table.RowHeaderCell>
+                    <Table.Cell>{job.company_name}</Table.Cell>
+                    <Table.Cell>{job.area ?? "-"}</Table.Cell>
+                    <Table.Cell>{job.postcode}</Table.Cell>
+                    <Table.Cell>{job.start_date}</Table.Cell>
+                    <Table.Cell>{job.workers_required}</Table.Cell>
+                    <Table.Cell>
+                      <span>{workersConfirmed}</span>
+                      {confirmedNames.length > 0 ? (
+                        <span style={{ display: "block", color: "var(--rd-text-muted)", fontSize: "0.78rem", marginTop: 2 }}>
+                          {confirmedNames.join(", ")}
+                        </span>
+                      ) : null}
+                    </Table.Cell>
+                    <Table.Cell>
+                      {isAdmin ? (
+                        <select
+                          value={normaliseBroadcastStatus(job.broadcast_status)}
+                          disabled={busyBroadcastJobId === job.job_id}
+                          onChange={(event) => handleBroadcastStatusChange(job.job_id, event.target.value)}
+                          style={{ fontSize: "0.875rem", padding: "0.25rem" }}
+                        >
+                          {BROADCAST_STATUS_OPTIONS.map((status) => (
+                            <option key={status} value={status}>{BROADCAST_STATUS_LABELS[status]}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        BROADCAST_STATUS_LABELS[normaliseBroadcastStatus(job.broadcast_status)]
+                      )}
+                    </Table.Cell>
+                    <Table.Cell>{job.payment_status}</Table.Cell>
+                    <Table.Cell>{job.job_status}</Table.Cell>
+                    <Table.Cell>
+                      {isAdmin && invoiceFeaturesEnabled
+                        ? (() => {
+                            const invoiceReminder = getInvoiceReminder(job);
+                            return invoiceReminder ? (
+                              <span
+                                style={{
+                                  display: "inline-block",
+                                  marginBottom: "0.5rem",
+                                  padding: "0.2rem 0.5rem",
+                                  borderRadius: 999,
+                                  background: "#fee2e2",
+                                  color: "#b91c1c",
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {invoiceReminder.text}
+                              </span>
+                            ) : null;
+                          })()
+                        : null}
+                      <div className="flex flex-col gap-2">
+                        <Link href={`/jobs/${job.job_id}/edit`}>Edit</Link>
+                        <button type="button" onClick={() => handleDelete(job.job_id, job.job_title)}>
+                          Delete
+                        </button>
+                      </div>
+                    </Table.Cell>
+                  </Table.Row>
+                );
+              })}
+            </Table.Body>
+          </Table.Root>
+        </ScrollArea>
+      </Box>
+
       <JobDetailModal
         job={activeJob}
         open={Boolean(activeJob)}
@@ -878,6 +1219,7 @@ export function JobDetailModal({
   const [requestedStatusUpdating, setRequestedStatusUpdating] = useState<Record<string, boolean>>({});
   const [requestedStatusError, setRequestedStatusError] = useState("");
   const [selectedAcceptedWorker, setSelectedAcceptedWorker] = useState<NormalisedRequestedWorkforce | null>(null);
+  const [selectedProfileWorker, setSelectedProfileWorker] = useState<WorkerOverviewRow | null>(null);
   const [requestedDispatchRecipients, setRequestedDispatchRecipients] = useState<Array<{
     id: string;
     name: string;
@@ -918,6 +1260,7 @@ export function JobDetailModal({
     setAttachReleaseMessage("");
     setRequestedStatusError("");
     setSelectedAcceptedWorker(null);
+    setSelectedProfileWorker(null);
   }, [activeJob?.job_id, open]);
 
   useEffect(() => {
@@ -1592,79 +1935,303 @@ export function JobDetailModal({
             (worker.worker_type === "contractor"
               ? `Contractor${worker.contractor_type ? ` • ${worker.contractor_type === "multi_discipline" ? "Multi-Discipline" : "Specialist"}` : ""}`
               : "Tradesman");
+          const workerId = getMatchingWorkerId(worker);
+          const selected = requestedSelectionIds.includes(workerId);
+          const status = worker.assignment_status || worker.dispatchStatus || worker.dispatch_status;
 
           return (
-            <div key={worker.worker_id} style={{ display: "grid", gap: "0.35rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                {selectable ? (
-                  <label style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", fontWeight: 700, color: "var(--rd-text)" }}>
-                    <input
-                      type="checkbox"
-                      checked={requestedSelectionIds.includes(worker.worker_id)}
-                      onChange={(event) => {
-                        setRequestedSelectionIds((current) =>
-                          event.target.checked
-                            ? [...new Set([...current, worker.worker_id])]
-                            : current.filter((id) => id !== worker.worker_id),
-                        );
-                        setRequestedSaveMessage("");
-                      }}
-                    />
-                    Request this workforce
-                  </label>
-                ) : null}
-                {worker.requested_by_client || worker.requestedByClient || worker.isClientRequested || worker.is_client_requested ? (
-                  <span style={{ width: "fit-content", borderRadius: 999, background: "#dbeafe", color: "#1d4ed8", padding: "0.15rem 0.55rem", fontSize: 12, fontWeight: 700 }}>
-                    Client requested
-                  </span>
-                ) : null}
-                {worker.assignment_status || worker.dispatchStatus || worker.dispatch_status ? (
-                  <span style={{ width: "fit-content", borderRadius: 999, background: "#f1f5f9", color: "#334155", padding: "0.15rem 0.55rem", fontSize: 12, fontWeight: 700 }}>
-                    Dispatch status: {formatDispatchStatus(worker.assignment_status || worker.dispatchStatus || worker.dispatch_status)}
-                  </span>
-                ) : null}
-              </div>
-              <RecommendedWorkerMatchCard
-                match={{
-                  workerId: worker.worker_id,
-                  displayName,
-                  subtitle,
-                  primaryRole: worker.primary_role ?? "General workforce",
-                  locationLabel,
-                  imageUrl: worker.card_image_url ?? worker.profile_image_url ?? "",
-                  avatarUrl: worker.profile_image_url ?? worker.card_image_url ?? "",
-                  matchStrength: worker.match_strength ?? 100,
-                  distanceLabel: worker.distance_label,
-                  recommendationSummary:
-                    worker.match_reason ??
-                    (worker.worker_type === "contractor"
-                      ? `strong contractor fit${worker.specialist_area ? ` in ${worker.specialist_area}` : ""}`
-                      : "strong trade fit"),
-                  reasons: worker.match_reasons,
-                  gaps: worker.match_gaps,
-                  scoreBreakdown: {
-                    role: worker.role_score,
-                    skills: worker.skills_score,
-                    compliance: worker.compliance_score,
-                    location: worker.location_score,
-                    availability: worker.availability_score,
-                    performance: worker.performance_score,
-                  },
-                  groupingDetailLabel: worker.grouping_detail_label ?? "Primary role",
-                  groupingDetailValue: worker.grouping_detail_value ?? worker.primary_role ?? subtitle,
-                  siteScoreStatus: worker.site_score_status_label ?? "Insufficient data",
-                  verifiedCompletedJobsCount: worker.verified_bookings,
-                }}
-              />
-            </div>
+            <WorkerGridCard
+              key={workerId || worker.worker_id}
+              imageUrl={getAvatar(worker)}
+              name={displayName}
+              role={worker.primary_role ?? subtitle}
+              location={locationLabel}
+              pill={worker.requested_by_client || worker.requestedByClient || worker.isClientRequested || worker.is_client_requested ? "Client requested" : status ? formatDispatchStatus(status) : null}
+              matchPill={formatPercentMatch(worker.match_strength)}
+              selectable={selectable}
+              selected={selected}
+              onToggleSelected={() => {
+                if (!workerId) return;
+                setRequestedSelectionIds((current) =>
+                  current.includes(workerId)
+                    ? current.filter((id) => id !== workerId)
+                    : [...new Set([...current, workerId])],
+                );
+                setRequestedSaveMessage("");
+              }}
+              onOpenProfile={() => setSelectedProfileWorker(buildProfileWorkerFromMatch(worker))}
+            />
           );
         };
+
+        const jobBrief =
+          activeJob.short_description ||
+          activeJob.duties ||
+          activeJob.optional_supporting_notes ||
+          null;
+        const requiredSkillsText = formatListValue(skillsRequired.length ? skillsRequired : normaliseToArray(activeJob.requirements));
+        const skillsContent = (
+          <div style={{ display: "grid", gap: "0.9rem" }}>
+            <section style={{ display: "grid", gap: "0.35rem" }}>
+              <h4 style={{ margin: 0, fontSize: "0.95rem" }}>Job brief / description</h4>
+              <p style={{ margin: 0, color: "var(--rd-text-muted)", lineHeight: 1.5 }}>
+                {jobBrief || "No job description provided."}
+              </p>
+            </section>
+            <section style={{ display: "grid", gap: "0.35rem" }}>
+              <h4 style={{ margin: 0, fontSize: "0.95rem" }}>Skills required</h4>
+              <p style={{ margin: 0, color: "var(--rd-text-muted)", lineHeight: 1.5 }}>
+                {requiredSkillsText || "No specific skills listed."}
+              </p>
+              {additionalSkillTags.length > 0 ? (
+                <p style={{ margin: 0, color: "var(--rd-text-muted)" }}>
+                  <strong>Skill tags:</strong> {formatListValue(additionalSkillTags)}
+                </p>
+              ) : null}
+            </section>
+            <section style={{ display: "grid", gap: "0.45rem" }}>
+              <h4 style={{ margin: 0, fontSize: "0.95rem" }}>Compliance / tickets</h4>
+              <DetailGrid
+                fields={[
+                  ["CSCS Required", formatCscsRequired(activeJob)],
+                  ["PPE Required", activeJob.ppe_required ? activeJob.ppe_detail ?? "PPE required" : formatBooleanValue(activeJob.ppe_required)],
+                  ["DBS Required", formatDbsRequired(activeJob)],
+                  ["IPAF Required", formatBooleanValue(activeJob.ipaf_required)],
+                  ["Tools Required", formatBooleanValue(activeJob.own_tools_required)],
+                  ["Tools Detail", activeJob.tools_required],
+                  ["Certificates Required", formatListValue(activeJob.certificates_required)],
+                  ["Shift Pattern", activeJob.shift_pattern],
+                ]}
+              />
+            </section>
+          </div>
+        );
+        const invoiceContent = (
+          <DetailGrid
+            fields={[
+              ["Invoice Status", activeJob.invoice_status ?? "not_ready"],
+              ["Invoice Dispatch Date", activeJob.invoice_send_date ?? formatDisplayDate(invoiceDispatchDate)],
+              ["Invoice Due Date", activeJob.invoice_due_date ?? formatDisplayDate(invoiceDueDate)],
+              ["Invoice Notes", activeJob.invoice_notes],
+            ]}
+          />
+        );
+        const labourContent = (activeJob.labour_payments ?? []).length === 0 ? (
+          <p style={{ margin: 0, color: "var(--rd-text-muted)" }}>
+            No worker assignments are linked to this job yet. Client-requested and confirmed workers will appear here.
+          </p>
+        ) : (
+          <div style={{ display: "grid", gap: "0.75rem" }}>
+            {(activeJob.labour_payments ?? []).map((payment) => (
+              <section key={payment.assignment_id} className="rd-themed-card job-detail-mobile-card">
+                <DetailGrid
+                  fields={[
+                    ["Worker name", payment.worker_name],
+                    ["Worker role/trade", payment.worker_role],
+                    ["Payment cycle", payment.payment_cycle],
+                    ["Payment status", formatLabourPaymentStatus(payment.payment_status)],
+                    ["Last payment date", payment.last_payment_date],
+                    ["Next payment due date", payment.next_payment_due_date],
+                    ["Day rate", payment.day_rate == null ? null : `£${payment.day_rate}`],
+                    ["Worked days in current cycle", payment.worked_days_current_cycle],
+                    ["Estimated amount due", `£${payment.estimated_amount_due}`],
+                    ["Payment receipt status", payment.payment_receipt_status],
+                    ["Preliminary payment notice status", payment.preliminary_payment_notice_status],
+                    ["Notes", payment.payment_notes],
+                  ]}
+                />
+              </section>
+            ))}
+          </div>
+        );
+        const requestedContent = requestedWorkforce.length === 0 ? (
+          <p style={{ margin: 0, color: "var(--rd-text-muted)" }}>
+            No client-requested workforce has been attached to this job yet.
+          </p>
+        ) : (
+          <div className="job-detail-workforce-stack">
+            {isAdmin ? (
+              <button type="button" onClick={() => openRequestedWorkforceDispatch(requestedWorkforce)}>
+                Dispatch requested workforce
+              </button>
+            ) : null}
+            {requestedStatusError ? (
+              <p style={{ margin: 0, color: "#b45309", fontWeight: 700 }}>{requestedStatusError}</p>
+            ) : null}
+            <div className="rd-worker-grid">
+                {requestedWorkforce.map((worker) => {
+                  const locationLabel = worker.locationLabel || formatLocation(worker.area, worker.postcode);
+                  const workerId = getRequestedWorkerId(worker);
+                  const dispatchStatus = worker.dispatchStatus || worker.dispatch_status || "requested";
+                  const canViewAcceptedWorkerDetails = !isAdmin && dispatchStatus === "accepted";
+                  return (
+                    <WorkerGridCard
+                      key={workerId ?? worker.id}
+                      imageUrl={getAvatar(worker)}
+                      name={worker.name || "Unnamed contractor"}
+                      role={worker.primaryRole || worker.workforceType}
+                      location={locationLabel || "Location TBC"}
+                      pill={getAcceptedStatus(worker)}
+                      matchPill={formatPercentMatch(worker.matchPercentage)}
+                      onOpenProfile={() => {
+                        // TODO: replace this lightweight profile adapter with full worker row hydration when the job detail endpoint returns complete profile data.
+                        setSelectedProfileWorker(buildProfileWorkerFromMatch({
+                          worker_id: workerId ?? worker.id,
+                          full_name: worker.name,
+                          phone: worker.phone,
+                          primary_role: worker.primaryRole,
+                          worker_type: worker.workforceType?.toLowerCase().includes("contractor") ? "contractor" : "tradesman",
+                          contractor_type: null,
+                          specialist_area: null,
+                          skill_tags: [],
+                          town: worker.area,
+                          postcode: worker.postcode ?? "",
+                          location_display: locationLabel,
+                          available_today: false,
+                          priority_tier: "",
+                          whatsapp_opt_in: false,
+                          right_to_work: false,
+                          contract_signed: false,
+                          site_score: null,
+                          verified_bookings: 0,
+                          match_strength: worker.matchPercentage ?? undefined,
+                          card_image_url: worker.avatarUrl ?? undefined,
+                          profile_image_url: worker.avatarUrl ?? undefined,
+                        }));
+                      }}
+                      footerAction={
+                        !isAdmin ? (
+                          <button
+                            type="button"
+                            disabled={!canViewAcceptedWorkerDetails}
+                            onClick={() => {
+                              if (canViewAcceptedWorkerDetails) openAcceptedWorkerDetails(worker);
+                            }}
+                            title={!canViewAcceptedWorkerDetails ? "Contact details available after admin completion." : undefined}
+                          >
+                            {canViewAcceptedWorkerDetails ? "View contact details" : "Contact details available after admin completion."}
+                          </button>
+                        ) : null
+                      }
+                    />
+                  );
+                })}
+            </div>
+          </div>
+        );
+        const acceptedContent = !isAdmin ? null : acceptedWorkersLoading ? (
+          <p style={{ margin: 0, color: "var(--rd-text-muted)" }}>Loading accepted workforce...</p>
+        ) : acceptedRows.length === 0 ? (
+          <p style={{ margin: 0, color: "var(--rd-text-muted)" }}>No workforce has accepted this dispatch yet.</p>
+        ) : (
+          <div className="job-detail-workforce-stack">
+            <h4 style={{ margin: 0, fontSize: "0.9rem" }}>Accepted workforce</h4>
+            <ScrollArea type="auto" scrollbars="horizontal" className="job-detail-mobile-carousel-scroll">
+              <div className="job-detail-mobile-carousel-track">
+                {acceptedRows.map((assignment) => (
+                  <section key={assignment.assignment_id} className="rd-themed-card job-detail-mobile-card job-detail-mobile-carousel-item job-detail-workforce-card">
+                    <strong>{assignment.worker.name}</strong>
+                    <DetailGrid
+                      fields={[
+                        ["Phone", assignment.worker.phone],
+                        ["Email", assignment.worker.email],
+                        ["Site score", assignment.worker.site_score ?? "Insufficient verified data"],
+                        ["Compliance summary", assignment.worker.compliance_summary.length > 0 ? assignment.worker.compliance_summary.join(", ") : "Compliance summary not available"],
+                        ["Accepted time", assignment.accepted_at ? new Date(assignment.accepted_at).toLocaleString("en-GB") : "Accepted"],
+                        ["Release status", assignment.assignment_status.replaceAll("_", " ")],
+                      ]}
+                    />
+                  </section>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        );
+        const confirmedContent = releasedWorkers.length === 0 ? null : (
+          <div className="job-detail-workforce-stack">
+            <h4 style={{ margin: 0, fontSize: "0.9rem" }}>Confirmed workforce</h4>
+            <ScrollArea type="auto" scrollbars="horizontal" className="job-detail-mobile-carousel-scroll">
+              <div className="job-detail-mobile-carousel-track">
+                {releasedWorkers.map((worker) => {
+                  const workerLocation = worker.location_display ?? [worker.town, worker.postcode].filter(Boolean).join(" ");
+                  const complianceSummary = [
+                    worker.right_to_work ? "Right to work" : null,
+                    worker.contract_signed ? "Contract signed" : null,
+                  ].filter(Boolean).join(", ");
+                  return (
+                    <section key={worker.worker_id} className="rd-themed-card job-detail-mobile-card job-detail-mobile-carousel-item job-detail-workforce-card">
+                      <strong>{worker.full_name}</strong>
+                      <DetailGrid
+                        fields={[
+                          ["Role/trade", worker.primary_role ?? "General workforce"],
+                          ["Phone", worker.phone],
+                          ["Arrival/start date", formatDisplayDate(activeJob.start_date)],
+                          ["Payment cycle", "Platform managed"],
+                          ["Compliance summary", complianceSummary || "Compliance summary not available"],
+                          ["Location", workerLocation || "Location TBC"],
+                        ]}
+                      />
+                    </section>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+          </div>
+        );
+        const workforceContent = (
+          <div style={{ display: "grid", gap: "0.75rem" }}>
+            {requestedContent}
+            {acceptedContent}
+            {confirmedContent}
+          </div>
+        );
+        const matchesContent = (
+          <div className="job-detail-matches">
+            {modalMatchingWorkers.length === 0 ? (
+              <p style={{ margin: 0, color: "var(--rd-text)" }}>No matching contractors or tradesmen found for this job yet.</p>
+            ) : (
+              <div style={{ display: "grid", gap: "0.85rem" }}>
+                {matchingRequestedWorkers.length > 0 ? (
+                  <section style={{ display: "grid", gap: "0.55rem" }}>
+                    <h4 style={{ margin: 0, fontSize: "0.9rem" }}>Client requested</h4>
+                    <div className="rd-worker-grid">
+                      {matchingRequestedWorkers.map((worker) => renderWorkerMatch(worker, !isAdmin))}
+                    </div>
+                  </section>
+                ) : null}
+                <section style={{ display: "grid", gap: "0.55rem" }}>
+                  <h4 style={{ margin: 0, fontSize: "0.9rem" }}>Matched to job brief</h4>
+                  {automaticMatches.length === 0 ? (
+                    <p style={{ margin: 0, color: "var(--rd-text-muted)" }}>No automatic matches found for this brief yet.</p>
+                  ) : (
+                    <div className="rd-worker-grid">
+                      {automaticMatches.map((worker) => renderWorkerMatch(worker, !isAdmin))}
+                    </div>
+                  )}
+                </section>
+                {!isAdmin ? (
+                  <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+                    <button type="button" onClick={saveProviderRequestedWorkers} disabled={requestedSaveBusy}>
+                      {requestedSaveBusy ? "Saving..." : `Request selected (${requestedSelectionIds.length})`}
+                    </button>
+                    {requestedSaveMessage ? (
+                      <span style={{ color: requestedSaveMessage.includes("saved") ? "#166534" : "#b45309", fontWeight: 600 }}>
+                        {requestedSaveMessage}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+        );
 
         return (
           <div className="job-detail-modal-content">
             <section className="job-detail-static-section">
               <h3 className="job-detail-static-title">Job Summary</h3>
               <DetailGrid
+                className="job-detail-summary-grid"
                 fields={[
                   ["Provider / Client", activeJob.company_name],
                   ["Selected Role / Trade", activeJob.selected_role ?? activeJob.core_role ?? activeJob.trade ?? activeJob.trade_type ?? activeJob.job_title],
@@ -1705,40 +2272,37 @@ export function JobDetailModal({
               ) : null}
             </section>
 
+            <section className="job-detail-mobile-tabs-shell" aria-label="Job detail sections">
+              <Tabs.Root defaultValue={openInvoice ? "invoice" : isAdmin && openLabour ? "payments" : openSkills ? "skills" : openDispatch ? "matches" : "skills"} className="job-detail-mobile-tabs">
+                <ScrollArea type="auto" scrollbars="horizontal" className="job-detail-mobile-tabs-scroll">
+                  <Tabs.List className="job-detail-mobile-tabs-list">
+                    <Tabs.Trigger value="skills">Skills</Tabs.Trigger>
+                    <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>
+                    {isAdmin ? <Tabs.Trigger value="payments">Payments</Tabs.Trigger> : null}
+                    <Tabs.Trigger value="workforce">Workforce</Tabs.Trigger>
+                    <Tabs.Trigger value="matches">Matches</Tabs.Trigger>
+                  </Tabs.List>
+                </ScrollArea>
+                <Box className="job-detail-mobile-dynamic-card">
+                  <Tabs.Content value="skills" className="job-detail-mobile-tab-content">{skillsContent}</Tabs.Content>
+                  <Tabs.Content value="invoice" className="job-detail-mobile-tab-content">{invoiceContent}</Tabs.Content>
+                  {isAdmin ? <Tabs.Content value="payments" className="job-detail-mobile-tab-content">{labourContent}</Tabs.Content> : null}
+                  <Tabs.Content value="workforce" className="job-detail-mobile-tab-content">{workforceContent}</Tabs.Content>
+                  <Tabs.Content value="matches" className="job-detail-mobile-tab-content">{matchesContent}</Tabs.Content>
+                </Box>
+              </Tabs.Root>
+            </section>
+
+            <div className="job-detail-desktop-accordions">
             <CollapsibleSection title="Skills & Compliance" defaultOpen={openSkills}>
-              <DetailGrid
-                fields={[
-                  ["Skills Required", formatListValue(skillsRequired.length ? skillsRequired : normaliseToArray(activeJob.requirements))],
-                  ...(additionalSkillTags.length > 0
-                    ? ([["Skill Tags", formatListValue(additionalSkillTags)]] as Array<[string, string | null]>)
-                    : []),
-                  ["CSCS Required", formatCscsRequired(activeJob)],
-                  ["PPE Required", activeJob.ppe_required ? activeJob.ppe_detail ?? "PPE required" : formatBooleanValue(activeJob.ppe_required)],
-                  ["DBS Required", formatDbsRequired(activeJob)],
-                  ["IPAF Required", formatBooleanValue(activeJob.ipaf_required)],
-                  ["Tools Required", formatBooleanValue(activeJob.own_tools_required)],
-                  ["Tools Detail", activeJob.tools_required],
-                  ["Certificates Required", formatListValue(activeJob.certificates_required)],
-                  ["Duties", activeJob.duties],
-                  ["Shift Pattern", activeJob.shift_pattern],
-                  ["Optional Supporting Notes", activeJob.optional_supporting_notes],
-                ]}
-              />
+              {skillsContent}
             </CollapsibleSection>
 
             <CollapsibleSection title="Invoice" defaultOpen={openInvoice}>
-              <DetailGrid
-                fields={[
-                  ["Provider Payment Reliability", getPaymentReliabilityLabel(activeJob.provider_payment_reliability_status)],
-                  ["Payment Status", activeJob.payment_status],
-                  ["Invoice Status", activeJob.invoice_status ?? "not_ready"],
-                  ["Invoice Dispatch Date", activeJob.invoice_send_date ?? formatDisplayDate(invoiceDispatchDate)],
-                  ["Invoice Due Date", activeJob.invoice_due_date ?? formatDisplayDate(invoiceDueDate)],
-                  ["Invoice Notes", activeJob.invoice_notes],
-                ]}
-              />
+              {invoiceContent}
             </CollapsibleSection>
 
+            {isAdmin ? (
             <CollapsibleSection title="Labour Payments" defaultOpen={openLabour}>
               {(activeJob.labour_payments ?? []).length === 0 ? (
                 <p style={{ margin: 0, color: "var(--rd-text-muted)" }}>
@@ -1831,6 +2395,7 @@ export function JobDetailModal({
                 </div>
               )}
             </CollapsibleSection>
+            ) : null}
 
             <CollapsibleSection title="Requested Workforce" defaultOpen={requestedWorkforce.length > 0}>
               {requestedWorkforce.length === 0 ? (
@@ -2079,7 +2644,7 @@ export function JobDetailModal({
                       {matchingRequestedWorkers.length === 0 ? (
                         <p style={{ margin: 0, color: "var(--rd-text-muted)" }}>No client-requested workforce attached yet.</p>
                       ) : (
-                        <div style={{ display: "grid", gap: "0.75rem" }}>
+                        <div className="rd-worker-grid">
                           {matchingRequestedWorkers.map((worker) => renderWorkerMatch(worker, !isAdmin))}
                         </div>
                       )}
@@ -2089,7 +2654,7 @@ export function JobDetailModal({
                       {automaticMatches.length === 0 ? (
                         <p style={{ margin: 0, color: "var(--rd-text-muted)" }}>No automatic matches found for this brief yet.</p>
                       ) : (
-                        <div style={{ display: "grid", gap: "0.75rem" }}>
+                        <div className="rd-worker-grid">
                           {automaticMatches.map((worker) => renderWorkerMatch(worker, !isAdmin))}
                         </div>
                       )}
@@ -2119,6 +2684,7 @@ export function JobDetailModal({
                 </div>
               ) : null}
             </CollapsibleSection>
+            </div>
           </div>
         );
       })() : null}
@@ -2183,6 +2749,12 @@ export function JobDetailModal({
           </div>
         </Modal>
       ) : null}
+      <WorkerProfileModal
+        worker={selectedProfileWorker}
+        open={Boolean(selectedProfileWorker)}
+        onClose={() => setSelectedProfileWorker(null)}
+        mode={mode}
+      />
     </Modal>
   );
 }

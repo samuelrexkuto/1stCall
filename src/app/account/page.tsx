@@ -71,6 +71,8 @@ export default async function AccountPage() {
     name: currentUser.providerName ?? currentUser.name ?? "Provider account",
     email: currentUser.email ?? null,
     avatarUrl: currentUser.avatarUrl ?? null,
+    profile_image_url: currentUser.avatarUrl ?? null,
+    profile_image_path: null,
     phone: null,
     town: null,
     postcode: null,

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { ArrowRightIcon, InfoCircledIcon } from "@radix-ui/react-icons";
+import { Callout } from "@radix-ui/themes";
 import type { JobOverviewRow } from "@/components/jobs/JobOverviewTable";
 import { normaliseBroadcastStatus } from "@/lib/dispatch/broadcast-status-constants";
 import { getProviderFacingJobLocation } from "@/lib/provider-job-status";
@@ -140,7 +142,7 @@ export function ProviderHiringUpdatesPanel({
       <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
         <div>
           <h2 style={{ margin: 0, fontSize: "1rem" }}>Hiring Updates</h2>
-          <p style={{ margin: "0.25rem 0 0", color: "var(--rd-text-muted)" }}>
+          <p className="mobile-hiring-updates-description" style={{ margin: "0.25rem 0 0", color: "var(--rd-text-muted)" }}>
             Provider-scoped progress updates for dispatch activity, shortlist review, and confirmed bookings.
           </p>
         </div>
@@ -173,9 +175,28 @@ export function ProviderHiringUpdatesPanel({
                       {job.broadcast_status || job.job_status}
                     </span>
                   </div>
-                  <p style={{ margin: 0, color: "var(--rd-text-muted)", lineHeight: 1.5 }}>
-                    {description}
-                  </p>
+                  {title === "Partially filled" ? (
+                    <>
+                      <p className="desktop-alert-description" style={{ margin: 0, color: "var(--rd-text-muted)", lineHeight: 1.5 }}>
+                        {description}
+                      </p>
+                      <Callout.Root
+                        color="gray"
+                        variant="surface"
+                        size="1"
+                        className="mobile-alert-callout"
+                      >
+                        <Callout.Icon>
+                          <InfoCircledIcon aria-hidden="true" />
+                        </Callout.Icon>
+                        <Callout.Text>{description}</Callout.Text>
+                      </Callout.Root>
+                    </>
+                  ) : (
+                    <p style={{ margin: 0, color: "var(--rd-text-muted)", lineHeight: 1.5 }}>
+                      {description}
+                    </p>
+                  )}
                   <div className="rd-alert-grid">
                     <AlertDetailField label="Job title" value={job.job_title} />
                     <AlertDetailField label="Required role" value={job.trade_type ?? "General workforce"} />
@@ -188,10 +209,24 @@ export function ProviderHiringUpdatesPanel({
                     <AlertDetailField label="Payment status" value={job.payment_status || "TBC"} />
                     <AlertDetailField label="Broadcast status" value={job.broadcast_status || "TBC"} />
                   </div>
-                  <div className="rd-themed-panel" style={{ padding: "0.75rem 0.85rem", gap: "0.25rem" }}>
+                  <div className="rd-themed-panel desktop-next-action-panel" style={{ padding: "0.75rem 0.85rem", gap: "0.25rem" }}>
                     <div className="rd-detail-label">Next action</div>
                     <div style={{ color: "var(--rd-text)", lineHeight: 1.45 }}>{nextAction}</div>
                   </div>
+                  <Callout.Root
+                    color="gray"
+                    variant="surface"
+                    size="1"
+                    className="mobile-next-action-callout"
+                  >
+                    <Callout.Icon>
+                      <ArrowRightIcon aria-hidden="true" />
+                    </Callout.Icon>
+                    <Callout.Text>
+                      <span className="rd-detail-label">Next action</span>
+                      <span className="mobile-next-action-callout__text">{nextAction}</span>
+                    </Callout.Text>
+                  </Callout.Root>
                   {releasedWorkers.length > 0 ? (
                     <details
                       className="rd-themed-panel"

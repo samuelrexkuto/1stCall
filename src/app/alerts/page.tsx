@@ -39,6 +39,7 @@ export default async function AlertsPage() {
       <main style={{ paddingTop: 8 }}>
         <div style={{ marginBottom: 18 }}>
           <h1
+            className="mobile-alerts-title"
             style={{
               margin: 0,
               color: "var(--rd-text)",
@@ -49,7 +50,7 @@ export default async function AlertsPage() {
           >
             Alerts
           </h1>
-          <p style={{ margin: "10px 0 0", color: "var(--rd-text-muted)", fontSize: 16, lineHeight: 1.6 }}>
+          <p className="mobile-alerts-description" style={{ margin: "10px 0 0", color: "var(--rd-text-muted)", fontSize: 16, lineHeight: 1.6 }}>
             {currentUser?.role === "job_provider"
               ? `Provider-scoped hiring updates for ${currentUser.providerName ?? "your account"} only, focused on current dispatch progress and confirmed booking activity.`
               : "Platform-wide operations alerts for dispatch execution, payments, invoices, onboarding follow-up, and worker document review. Closing a popup on other pages does not remove it from this list."}

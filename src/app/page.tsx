@@ -1,6 +1,7 @@
 import { AIJobIntakeWorkspace } from "@/components/dashboard/AIJobIntakeWorkspace";
 import { HomeMapSection } from "@/components/dashboard/HomeMapSection";
 import { SavedWorkersPanel } from "@/components/workers/SavedWorkersPanel";
+import { Box, Separator, Text } from "@radix-ui/themes";
 import { getAppSessionUser } from "@/lib/auth/session";
 import { getDashboardMapData } from "@/lib/dashboard";
 import { loadJobsOverview } from "@/lib/jobs";
@@ -129,6 +130,14 @@ export default async function HomePage() {
         jobs={jobsData?.jobs ?? []}
         workers={workersData?.workers ?? []}
       />
+      <Box asChild className="home-footer">
+        <footer>
+          <Separator size="4" className="home-footer-separator" />
+          <Text as="p" size="2" color="gray" className="home-footer-copyright">
+            Workforce Dispatch © 2026
+          </Text>
+        </footer>
+      </Box>
     </main>
   );
 }

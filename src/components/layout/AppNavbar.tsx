@@ -6,7 +6,9 @@ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 
 import { useRouter } from "next/navigation";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
+import NavbarWorkerSearch from "@/components/navigation/NavbarWorkerSearch";
 import { AppDropdownMenu, DropdownMenu } from "@/components/ui/AppDropdownMenu";
+import { cacheBustImageUrl } from "@/lib/avatar";
 
 const clientNavLinks = [
   { href: "/", label: "Home", public: true },
@@ -168,15 +170,9 @@ export function AppNavbar() {
           </div>
         </div>
       ) : null}
-      <header className="app-navbar">
+      <header className="app-navbar rd-top-navbar">
+        <div className="rd-top-navbar-inner">
         <div className="app-navbar__identity">
-          <Link href="/" className="app-navbar__brand">
-            <span className="app-navbar__brand-mark">
-              RD
-            </span>
-            <span className="app-navbar__brand-text">Recruited Dispatch</span>
-          </Link>
-
           <AppDropdownMenu
             align="start"
             side="bottom"
@@ -220,7 +216,8 @@ export function AppNavbar() {
                   trigger={
                     <button
                       type="button"
-                      className={`app-navbar__desktop-link app-navbar__account-trigger${active ? " is-active" : ""}`}
+                      className={`nav-link app-navbar__desktop-link app-navbar__account-trigger${active ? " nav-link-active is-active" : ""}`}
+                      aria-current={active ? "page" : undefined}
                     >
                       {link.label}
                     </button>
@@ -238,11 +235,12 @@ export function AppNavbar() {
             }
 
             return (
-            <Link
+              <Link
                 key={link.href}
                 href={link.href}
                 onClick={(event) => handleRestrictedNav(event, link)}
-                className={`app-navbar__desktop-link${active ? " is-active" : ""}`}
+                className={`nav-link app-navbar__desktop-link${active ? " nav-link-active is-active" : ""}`}
+                aria-current={active ? "page" : undefined}
               >
                 {link.label}
               </Link>
@@ -265,11 +263,16 @@ export function AppNavbar() {
             </button>
           ) : null}
 
+          <div className="rd-mobile-navbar-search">
+            <NavbarWorkerSearch />
+          </div>
+
           <Link
             href="/alerts"
             onClick={(event) => handleRestrictedNav(event, { href: "/alerts", label: "Alerts", authRequired: true })}
-            className={`app-navbar__mobile-alerts${isAlertsActive ? " is-active" : ""}`}
+            className={`nav-link app-navbar__mobile-alerts${isAlertsActive ? " nav-link-active is-active" : ""}`}
             aria-label="Alerts"
+            aria-current={isAlertsActive ? "page" : undefined}
           >
             <BellIcon />
           </Link>
@@ -291,6 +294,7 @@ export function AppNavbar() {
             </svg>
           </button>
         </div>
+        </div>
       </header>
 
       {open ? (
@@ -301,7 +305,12 @@ export function AppNavbar() {
                 key={link.href}
                 href={link.href}
                 onClick={(event) => handleRestrictedNav(event, link)}
-                className="app-navbar__mobile-link"
+                className="nav-link app-navbar__mobile-link"
+                aria-current={
+                  pathname === link.href || (link.href !== "/" && pathname.startsWith(`${link.href}/`))
+                    ? "page"
+                    : undefined
+                }
               >
                 {link.label}
               </Link>
@@ -364,8 +373,13 @@ export function MobileBottomNavigation() {
 
   return (
     <>
-      <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-        <Link href="/" className={`mobile-bottom-nav__item${isHomeActive ? " is-active" : ""}`} aria-label="Home">
+      <nav className="mobile-bottom-nav rd-bottom-nav" aria-label="Bottom navigation">
+        <Link
+          href="/"
+          className={`nav-link mobile-bottom-nav__item${isHomeActive ? " nav-link-active is-active" : ""}`}
+          aria-label="Home"
+          aria-current={isHomeActive ? "page" : undefined}
+        >
           <HomeIcon />
           <span>Home</span>
         </Link>
@@ -378,8 +392,9 @@ export function MobileBottomNavigation() {
           trigger={
             <button
               type="button"
-              className={`mobile-bottom-nav__item${isAccountActive ? " is-active" : ""}`}
+              className={`nav-link mobile-bottom-nav__item${isAccountActive ? " nav-link-active is-active" : ""}`}
               aria-label="Account menu"
+              aria-current={isAccountActive ? "page" : undefined}
             >
               <UserIcon />
               <span>Account</span>
@@ -403,8 +418,9 @@ export function MobileBottomNavigation() {
           trigger={
             <button
               type="button"
-              className={`mobile-bottom-nav__item${isDashboardActive ? " is-active" : ""}`}
+              className={`nav-link mobile-bottom-nav__item${isDashboardActive ? " nav-link-active is-active" : ""}`}
               aria-label="Dashboard menu"
+              aria-current={isDashboardActive ? "page" : undefined}
             >
               <DashboardIcon />
               <span>Dashboard</span>
@@ -425,13 +441,49 @@ export function MobileBottomNavigation() {
 
 function ProfileAvatar({ user }: { user: ReturnType<typeof useAuthSession>["user"] }) {
   const name = user?.role === "admin" ? user.name ?? user.email ?? "Admin" : user?.providerName ?? user?.name ?? "Guest";
+  const [accountAvatarUrl, setAccountAvatarUrl] = useState<string | null>(user?.avatarUrl ?? null);
+
+  useEffect(() => {
+    setAccountAvatarUrl(user?.avatarUrl ?? null);
+  }, [user?.avatarUrl]);
+
+  useEffect(() => {
+    function handleAvatarUpdated(event: Event) {
+      const customEvent = event as CustomEvent<{
+        profile_image_url?: string | null;
+        profile_image_path?: string | null;
+        avatar_url?: string | null;
+        avatar_path?: string | null;
+      }>;
+
+      const nextUrl = customEvent.detail?.profile_image_url || customEvent.detail?.avatar_url || null;
+
+      if (nextUrl) {
+        setAccountAvatarUrl(cacheBustImageUrl(nextUrl));
+      }
+    }
+
+    window.addEventListener("account-avatar-updated", handleAvatarUpdated);
+
+    return () => {
+      window.removeEventListener("account-avatar-updated", handleAvatarUpdated);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "development") return;
+    console.log("[TopNav] avatar source", {
+      accountAvatarUrl,
+      userAvatarUrl: user?.avatarUrl ?? null,
+    });
+  }, [accountAvatarUrl, user?.avatarUrl]);
 
   return (
-    <span className="app-navbar__mobile-avatar-wrap" aria-hidden="true">
-      {user?.avatarUrl ? (
-        <img src={user.avatarUrl} alt="" className="app-navbar__mobile-avatar" />
+    <span className="rd-topbar-avatar app-navbar__mobile-avatar-wrap" aria-hidden="true">
+      {accountAvatarUrl ? (
+        <img src={accountAvatarUrl} alt="" className="rd-topbar-avatar-image app-navbar__mobile-avatar" />
       ) : (
-        <span className="app-navbar__mobile-avatar-fallback">{getInitials(name)}</span>
+        <span className="rd-topbar-avatar-initials app-navbar__mobile-avatar-fallback">{getInitials(name)}</span>
       )}
     </span>
   );
@@ -548,8 +600,11 @@ function UserIcon() {
 
 function DashboardIcon() {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M4 5h7v6H4V5ZM13 5h7v4h-7V5ZM13 11h7v8h-7v-8ZM4 13h7v6H4v-6Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    <svg width="20" height="20" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+      <rect x="1.5" y="1.5" width="5" height="5" rx="1.15" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="8.5" y="1.5" width="5" height="5" rx="1.15" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="1.5" y="8.5" width="5" height="5" rx="1.15" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="8.5" y="8.5" width="5" height="5" rx="1.15" stroke="currentColor" strokeWidth="1.2" />
     </svg>
   );
 }

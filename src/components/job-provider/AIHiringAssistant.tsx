@@ -51,7 +51,7 @@ export function AIHiringAssistant({
   const [resolvedLocation, setResolvedLocation] = useState<ResolvedLocationPayload | null>(null);
   const [activeWorker, setActiveWorker] = useState<WorkerOverviewRow | null>(null);
   const [feedback, setFeedback] = useState("");
-  const [profileInitialTab, setProfileInitialTab] = useState<"Site Score presented by StatHub" | "Tender Confidence Pack">("Site Score presented by StatHub");
+  const [profileInitialTab, setProfileInitialTab] = useState<"Site Score presented by StatHub" | "Portfolio">("Site Score presented by StatHub");
   const providerId = user?.providerId ?? "job-provider-local";
   const isJobProvider = user?.role === "job_provider";
   const showHeader = Boolean(title || description);
@@ -278,11 +278,11 @@ export function AIHiringAssistant({
                       <button
                         type="button"
                         onClick={() => {
-                          setProfileInitialTab("Tender Confidence Pack");
+                          setProfileInitialTab("Portfolio");
                           setActiveWorker(worker);
                         }}
                       >
-                        Open Tender Confidence Pack
+                        Open Portfolio
                       </button>
                       <button
                         type="button"

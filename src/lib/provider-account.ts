@@ -4,89 +4,16 @@ import type {
   ProviderBillingStatus,
   ProviderPaygPackType,
   ProviderTrialAccessLevel,
-  ProviderTrialStatus,
 } from "@/lib/auth/types";
 import { normalizeAccountTier } from "@/lib/provider-access";
+import {
+  isDateExpired,
+  isProviderTrialActive,
+  type ProviderAccountRecord,
+} from "@/lib/provider-account-shared";
 
-export interface ProviderAccountRecord {
-  id: string;
-  name: string;
-  email: string | null;
-  avatarUrl: string | null;
-  phone: string | null;
-  town: string | null;
-  postcode: string | null;
-  accessTier: string | null;
-  accessStatus: string | null;
-  accountTier: ProviderAccountTier;
-  billingStatus: ProviderBillingStatus;
-  paygPackType: ProviderPaygPackType;
-  paygDispatchAllowanceTotal: number;
-  paygDispatchAllowanceRemaining: number;
-  usageToday: number;
-  monthlyRenewalDate: string | null;
-  monthlyActive: boolean;
-  activeSubscription: boolean;
-  trialAccess: boolean;
-  isTrialMonth: boolean;
-  trialGrantedByAdmin: boolean;
-  trialStartDate: string | null;
-  trialEndDate: string | null;
-  trialStatus: ProviderTrialStatus;
-  trialAccessLevel: ProviderTrialAccessLevel;
-  fullAccess: boolean;
-  adminFullAccess: boolean;
-  accessLevel: string | null;
-  dispatchAccessSource: string | null;
-  trialGrantedBy: string | null;
-  trialGrantedAt: string | null;
-  trialNotes: string | null;
-  internalBillingNote: string | null;
-  successFeeStatus: string | null;
-  stripeCustomerId: string | null;
-  stripeSubscriptionId: string | null;
-  stripeSubscriptionStatus: string | null;
-  profileOpensThisMonth: number;
-  compareActionsThisMonth: number;
-  manualDraftsUsed: number;
-}
-
-function parseTrialBoundary(value: string, endOfDay: boolean) {
-  const hasTime = value.includes("T");
-  const parsed = new Date(hasTime ? value : `${value}T${endOfDay ? "23:59:59" : "00:00:00"}Z`);
-  if (Number.isNaN(parsed.getTime())) return null;
-  if (hasTime && endOfDay) parsed.setUTCHours(23, 59, 59, 999);
-  if (hasTime && !endOfDay) parsed.setUTCHours(0, 0, 0, 0);
-  return parsed;
-}
-
-export function isProviderTrialActive(account: {
-  trialAccess?: boolean | null;
-  isTrialMonth?: boolean | null;
-  trialGrantedByAdmin?: boolean | null;
-  trialStatus?: ProviderTrialStatus | null;
-  trialAccessLevel?: ProviderTrialAccessLevel;
-  trialStartDate?: string | null;
-  trialEndDate?: string | null;
-}) {
-  if (account.trialAccess !== true) return false;
-  if (account.trialStatus !== "active") return false;
-  if (account.trialAccessLevel && account.trialAccessLevel !== "full_access") return false;
-  if (!account.trialStartDate || !account.trialEndDate) return false;
-  const start = parseTrialBoundary(account.trialStartDate, false);
-  const end = parseTrialBoundary(account.trialEndDate, true);
-  const now = Date.now();
-  return Boolean(start && end && start.getTime() <= now && end.getTime() > now);
-}
-
-function isDateExpired(dateString: string | null | undefined) {
-  if (!dateString) return false;
-  const today = new Date();
-  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
-  const parsed = parseTrialBoundary(dateString, false);
-  if (!parsed) return false;
-  return todayUtc > parsed.getTime();
-}
+export { isProviderTrialActive };
+export type { ProviderAccountRecord };
 
 function normalizePaygPackType(row: Record<string, unknown> | null): ProviderPaygPackType {
   const candidate = row?.payg_pack_type ?? row?.payg_pack;
@@ -211,12 +138,17 @@ function normalizeRow(row: Record<string, unknown> | null) {
 }
 
 function getAvatarUrl(row: Record<string, unknown> | null) {
-  for (const key of ["avatar_url", "profile_image_url", "profile_image", "image_url", "logo_url"]) {
+  for (const key of ["profile_image_url", "avatar_url", "profile_image", "image_url", "logo_url"]) {
     const value = row?.[key];
     if (typeof value === "string" && value.trim()) return value.trim();
   }
 
   return null;
+}
+
+function getProfileImagePath(row: Record<string, unknown> | null) {
+  const value = row?.profile_image_path ?? row?.avatar_path;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 async function loadProjectManagementAccessOverlay(
@@ -323,6 +255,8 @@ function normalizeProviderAccountRecord(
     name: typeof row?.name === "string" ? row.name : "Unnamed provider",
     email: typeof row?.email === "string" ? row.email : null,
     avatarUrl: getAvatarUrl(row),
+    profile_image_url: getAvatarUrl(row),
+    profile_image_path: getProfileImagePath(row),
     phone: typeof row?.phone === "string" ? row.phone : null,
     town: typeof row?.town === "string" ? row.town : null,
     postcode: typeof row?.postcode === "string" ? row.postcode : null,
@@ -360,8 +294,8 @@ async function loadMonthlyUsageCounts(
 export async function loadProviderAccount(providerId: string): Promise<ProviderAccountRecord | null> {
   const supabase = createAdminSupabaseClient();
   const selects = [
+    "id, name, email, avatar_url, avatar_path, profile_image_url, profile_image_path, phone, town, postcode, account_tier, billing_status, payg_pack_type, payg_dispatch_allowance_total, payg_dispatch_allowance_remaining, payg_pack, payg_allowance_total, payg_allowance_remaining, dispatch_allowance_remaining, usage_today, monthly_renewal_date, monthly_active, active_subscription, access_tier, access_status, trial_access, is_trial_month, trial_granted_by_admin, trial_start_date, trial_end_date, trial_status, trial_access_level, trial_granted_by, trial_granted_at, trial_notes, internal_billing_note, success_fee_status, full_access, admin_full_access, access_level, dispatch_access_source",
     "id, name, email, avatar_url, profile_image_url, phone, town, postcode, account_tier, billing_status, payg_pack_type, payg_dispatch_allowance_total, payg_dispatch_allowance_remaining, payg_pack, payg_allowance_total, payg_allowance_remaining, dispatch_allowance_remaining, usage_today, monthly_renewal_date, monthly_active, active_subscription, access_tier, access_status, trial_access, is_trial_month, trial_granted_by_admin, trial_start_date, trial_end_date, trial_status, trial_access_level, trial_granted_by, trial_granted_at, trial_notes, internal_billing_note, success_fee_status, full_access, admin_full_access, access_level, dispatch_access_source",
-    "id, name, email, avatar_url, phone, town, postcode, account_tier, billing_status, payg_pack_type, payg_dispatch_allowance_total, payg_dispatch_allowance_remaining, payg_pack, payg_allowance_total, payg_allowance_remaining, dispatch_allowance_remaining, usage_today, monthly_renewal_date, monthly_active, active_subscription, access_tier, access_status, trial_access, is_trial_month, trial_granted_by_admin, trial_start_date, trial_end_date, trial_status, trial_access_level, trial_granted_by, trial_granted_at, trial_notes, internal_billing_note, success_fee_status, full_access, admin_full_access, access_level, dispatch_access_source",
     "id, name, email, phone, town, postcode, account_tier, billing_status, payg_pack_type, payg_dispatch_allowance_total, payg_dispatch_allowance_remaining, usage_today, monthly_renewal_date, monthly_active, is_trial_month, trial_granted_by_admin, trial_start_date, trial_end_date, trial_status, internal_billing_note, success_fee_status",
     "id, name, email, phone, town, postcode, account_tier, billing_status, payg_pack_type, payg_dispatch_allowance_total, payg_dispatch_allowance_remaining, usage_today, monthly_renewal_date, monthly_active, success_fee_status",
     "id, name, email, phone, town, postcode",

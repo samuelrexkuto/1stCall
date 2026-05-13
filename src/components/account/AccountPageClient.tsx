@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { BILLING_PRODUCTS } from "@/lib/billing";
+import { cacheBustImageUrl, getAvatarUrl } from "@/lib/avatar";
+import { validateProfileImage } from "@/lib/profileImages";
 import { getAccountEntitlements, normalizeAccountTier } from "@/lib/provider-access";
-import { isProviderTrialActive, type ProviderAccountRecord } from "@/lib/provider-account";
+import { isProviderTrialActive, type ProviderAccountRecord } from "@/lib/provider-account-shared";
 
 export function AccountPageClient({
   initialAccount,
@@ -20,13 +22,15 @@ export function AccountPageClient({
   const [form, setForm] = useState({
     name: initialAccount.name,
     email: initialAccount.email ?? "",
-    avatarUrl: initialAccount.avatarUrl ?? "",
+    avatarUrl: initialAccount.profile_image_url ?? initialAccount.avatarUrl ?? "",
+    profileImageUrl: initialAccount.profile_image_url ?? initialAccount.avatarUrl ?? "",
+    profileImagePath: initialAccount.profile_image_path ?? "",
     phone: initialAccount.phone ?? "",
     town: initialAccount.town ?? "",
     postcode: initialAccount.postcode ?? "",
   });
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(initialAccount.avatarUrl ?? "");
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
+  const [profilePreviewUrl, setProfilePreviewUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(initialNotice);
   const [billingBusy, setBillingBusy] = useState<null | string>(null);
@@ -98,16 +102,41 @@ export function AccountPageClient({
       : account.billingStatus;
 
   useEffect(() => {
-    if (!avatarFile) {
-      setAvatarPreviewUrl(form.avatarUrl);
+    if (!profileImageFile) {
       return;
     }
 
-    const objectUrl = URL.createObjectURL(avatarFile);
-    setAvatarPreviewUrl(objectUrl);
+    const objectUrl = URL.createObjectURL(profileImageFile);
+    setProfilePreviewUrl(objectUrl);
 
     return () => URL.revokeObjectURL(objectUrl);
-  }, [avatarFile, form.avatarUrl]);
+  }, [profileImageFile]);
+
+  function handleProfileImageChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+
+    setProfileImageFile(file);
+
+    if (!file) {
+      setProfilePreviewUrl(null);
+      return;
+    }
+
+    try {
+      validateProfileImage(file);
+      setFeedback("");
+    } catch (error) {
+      setProfileImageFile(null);
+      setProfilePreviewUrl(null);
+      event.target.value = "";
+      setFeedback(error instanceof Error ? error.message : "Invalid profile image.");
+    }
+  }
+
+  function handleInputChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: value }));
+  }
 
   async function handleSaveAccount(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -116,27 +145,55 @@ export function AccountPageClient({
 
     try {
       let avatarUrl = form.avatarUrl;
-      if (avatarFile) {
+      let profileImageUrl = form.profileImageUrl;
+      let profileImagePath = form.profileImagePath;
+
+      if (profileImageFile) {
         const avatarFormData = new FormData();
-        avatarFormData.append("avatar", avatarFile);
+        avatarFormData.set("avatar", profileImageFile);
         const avatarResponse = await fetch("/api/account/avatar", {
           method: "POST",
           body: avatarFormData,
         });
         const avatarPayload = await avatarResponse.json().catch(() => ({}));
 
-        if (!avatarResponse.ok || !avatarPayload.success || typeof avatarPayload.avatarUrl !== "string") {
+        if (
+          !avatarResponse.ok ||
+          !avatarPayload.success ||
+          (typeof avatarPayload.avatarUrl !== "string" &&
+            typeof avatarPayload.profile_image_url !== "string")
+        ) {
           setFeedback(avatarPayload.error ?? "Unable to upload profile image.");
           return;
         }
 
-        avatarUrl = avatarPayload.avatarUrl;
+        avatarUrl = avatarPayload.avatarUrl ?? avatarPayload.avatar_url ?? avatarPayload.profile_image_url;
+        profileImageUrl =
+          avatarPayload.profileImageUrl ??
+          avatarPayload.profile_image_url ??
+          avatarPayload.avatarUrl ??
+          avatarPayload.avatar_url;
+        profileImagePath =
+          avatarPayload.profileImagePath ??
+          avatarPayload.profile_image_path ??
+          avatarPayload.avatar_path ??
+          avatarPayload.path ??
+          "";
       }
 
       const response = await fetch("/api/account", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, avatarUrl }),
+        body: JSON.stringify({
+          ...form,
+          avatarUrl,
+          profileImageUrl,
+          profileImagePath,
+          profile_image_url: profileImageUrl,
+          profile_image_path: profileImagePath,
+          avatar_url: profileImageUrl,
+          avatar_path: profileImagePath,
+        }),
       });
       const payload = await response.json().catch(() => ({}));
 
@@ -145,11 +202,33 @@ export function AccountPageClient({
         return;
       }
 
-      setAccount(payload.provider);
+      const updatedAccount = payload.account ?? payload.provider ?? {
+        ...account,
+        ...form,
+        avatarUrl,
+        profile_image_url: profileImageUrl,
+        profile_image_path: profileImagePath,
+      };
+      const displayUrl = getAvatarUrl(updatedAccount) ?? profileImageUrl ?? avatarUrl ?? null;
+
+      setAccount(updatedAccount);
       setUser(payload.user);
-      setAvatarFile(null);
-      setForm((current) => ({ ...current, avatarUrl }));
+      setProfileImageFile(null);
+      setProfilePreviewUrl(cacheBustImageUrl(displayUrl));
+      setForm((current) => ({ ...current, avatarUrl, profileImageUrl, profileImagePath }));
       setFeedback("Account details updated.");
+      window.dispatchEvent(
+        new CustomEvent("account-avatar-updated", {
+          detail: {
+            profile_image_url: profileImageUrl,
+            profile_image_path: profileImagePath,
+            avatar_url: profileImageUrl,
+            avatar_path: profileImagePath,
+          },
+        }),
+      );
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Unable to save account details.");
     } finally {
       setSaving(false);
     }
@@ -356,82 +435,108 @@ export function AccountPageClient({
         </div>
       </section>
 
-      <section
-        style={{
-          padding: "1rem",
-          borderRadius: 18,
-          border: "1px solid var(--rd-border)",
-          background: "var(--rd-bg-elevated)",
-          display: "grid",
-          gap: "0.85rem",
-        }}
-      >
-        <div>
-          <h2 style={{ margin: 0, fontSize: "1.05rem" }}>Company / Account Details</h2>
-          <p style={{ margin: "0.35rem 0 0", color: "var(--rd-text-muted)" }}>
-            Update your company or account contact details while keeping the current provider linkage intact.
-          </p>
-        </div>
-        <form onSubmit={handleSaveAccount} style={{ display: "grid", gap: "0.85rem", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-          <label style={{ display: "grid", gap: "0.45rem" }}>
-            Profile Image
-            <span style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0 }}>
-              <span
-                style={{
-                  width: 54,
-                  height: 54,
-                  borderRadius: 999,
-                  overflow: "hidden",
-                  background: "var(--rd-surface-soft)",
-                  border: "1px solid var(--rd-border)",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                  color: "var(--rd-text)",
-                  fontWeight: 800,
-                }}
-              >
-                {avatarPreviewUrl ? (
-                  <img src={avatarPreviewUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+      <section className="rd-card">
+        <form className="rd-form-stack" onSubmit={handleSaveAccount}>
+          <div>
+            <h2 className="rd-page-subtitle" style={{ margin: 0 }}>
+              Company / Account Details
+            </h2>
+            <p className="rd-page-subtitle">
+              Update your company or account contact details while keeping the current provider linkage intact.
+            </p>
+          </div>
+
+          <div className="rd-account-grid">
+            <label className="rd-field rd-profile-image-field">
+              <span className="rd-field-label">Profile Image</span>
+
+              <div className="rd-profile-upload-row">
+                {profilePreviewUrl || getAvatarUrl(account) || form.profileImageUrl || account.avatarUrl ? (
+                  <img
+                    className="rd-profile-avatar"
+                    src={profilePreviewUrl || getAvatarUrl(account) || form.profileImageUrl || account.avatarUrl || ""}
+                    alt=""
+                  />
                 ) : (
-                  (form.name || account.name || "RD")
-                    .split(/\s+/)
-                    .filter(Boolean)
-                    .slice(0, 2)
-                    .map((part) => part[0]?.toUpperCase())
-                    .join("") || "RD"
+                  <span className="rd-profile-avatar rd-profile-avatar--fallback" aria-hidden="true">
+                    {(form.name || account.name || "RD")
+                      .split(/\s+/)
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .map((part) => part[0]?.toUpperCase())
+                      .join("") || "RD"}
+                  </span>
                 )}
-              </span>
+
+                <input
+                  className="rd-control rd-file-control"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={handleProfileImageChange}
+                />
+              </div>
+            </label>
+
+            <label className="rd-field">
+              <span className="rd-field-label">Company / Account Name</span>
               <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)}
+                className="rd-control"
+                name="name"
+                value={form.name}
+                onChange={handleInputChange}
+                autoComplete="organization"
               />
-            </span>
-          </label>
-          <label style={{ display: "grid", gap: "0.35rem" }}>
-            Company / Account Name
-            <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
-          </label>
-          <label style={{ display: "grid", gap: "0.35rem" }}>
-            Email
-            <input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} />
-          </label>
-          <label style={{ display: "grid", gap: "0.35rem" }}>
-            Phone
-            <input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
-          </label>
-          <label style={{ display: "grid", gap: "0.35rem" }}>
-            Town
-            <input value={form.town} onChange={(event) => setForm((current) => ({ ...current, town: event.target.value }))} />
-          </label>
-          <label style={{ display: "grid", gap: "0.35rem" }}>
-            Postcode
-            <input value={form.postcode} onChange={(event) => setForm((current) => ({ ...current, postcode: event.target.value }))} />
-          </label>
-          <div style={{ display: "flex", alignItems: "end" }}>
-            <button type="submit" disabled={saving}>
+            </label>
+
+            <label className="rd-field">
+              <span className="rd-field-label">Email</span>
+              <input
+                className="rd-control"
+                name="email"
+                value={form.email}
+                onChange={handleInputChange}
+                type="email"
+                autoComplete="email"
+              />
+            </label>
+
+            <label className="rd-field">
+              <span className="rd-field-label">Phone</span>
+              <input
+                className="rd-control"
+                name="phone"
+                value={form.phone}
+                onChange={handleInputChange}
+                type="tel"
+                autoComplete="tel"
+              />
+            </label>
+
+            <label className="rd-field">
+              <span className="rd-field-label">Town</span>
+              <input
+                className="rd-control"
+                name="town"
+                value={form.town}
+                onChange={handleInputChange}
+                autoComplete="address-level2"
+              />
+            </label>
+
+            <label className="rd-field">
+              <span className="rd-field-label">Postcode</span>
+              <input
+                className="rd-control"
+                name="postcode"
+                value={form.postcode}
+                onChange={handleInputChange}
+                autoComplete="postal-code"
+              />
+            </label>
+          </div>
+
+          <div className="rd-actions-row">
+            <button className="rd-button rd-button--primary" type="submit" disabled={saving}>
               {saving ? "Saving..." : "Save Account Details"}
             </button>
           </div>

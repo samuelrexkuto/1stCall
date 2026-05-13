@@ -82,7 +82,14 @@ export function SaveWorkerButton({
         onChange?.(result.saved);
       }}
     >
-      {saved ? "Remove from Saved List" : "Save Worker"}
+      {saved ? (
+        "Remove from Saved List"
+      ) : (
+        <>
+          <span className="desktop-save-worker-label">Save Worker</span>
+          <span className="mobile-save-worker-label">Save</span>
+        </>
+      )}
     </button>
   );
 }

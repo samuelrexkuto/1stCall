@@ -34,22 +34,43 @@ export function WorkerDocumentsCarousel({
     setImageLoadFailed(false);
   }, [index, selectedType, documents]);
 
-  if (documents.length === 0) {
-    return (
-      <section
-        style={{
-          marginTop: "1rem",
-          paddingTop: "1rem",
-          borderTop: "1px solid var(--rd-border)",
-        }}
-      >
-        <h3 style={{ marginTop: 0, marginBottom: "0.75rem" }}>Documents</h3>
-        <p style={{ margin: 0 }}>No documents uploaded yet.</p>
-      </section>
-    );
+  const activeDocument = filteredDocuments[index] ?? null;
+  const documentsByType = new Map<WorkerDocumentType, WorkerDocument[]>();
+  for (const document of documents) {
+    documentsByType.set(document.document_type, [
+      ...(documentsByType.get(document.document_type) ?? []),
+      document,
+    ]);
   }
 
-  const activeDocument = filteredDocuments[index] ?? null;
+  const documentSections = [
+    {
+      title: "Insurance",
+      body: "Option/display area to store/list insurance types and related documents.",
+      // TODO: add an insurance document type when the validation schema supports insurance uploads.
+      documents: [] as WorkerDocument[],
+    },
+    {
+      title: "CSCS",
+      body: "Verification code required. Related document/status area.",
+      documents: documentsByType.get("cscs_card") ?? [],
+    },
+    {
+      title: "Enhanced DBS",
+      body: "Option to store/show DBS Update Service proof or Enhanced DBS paperwork.",
+      documents: [...(documentsByType.get("enhanced_dbs") ?? []), ...(documentsByType.get("dbs") ?? [])],
+    },
+    {
+      title: "Qualifications / NVQ / Certification",
+      body: "Option to store/list credentials. Documents must be available for verification.",
+      documents: documentsByType.get("certificate") ?? [],
+    },
+    {
+      title: "Accreditations / Memberships",
+      body: "Option to store/list accreditations, e.g. SafeContractor. Documents must be available for verification.",
+      documents: [] as WorkerDocument[],
+    },
+  ];
 
   return (
     <section
@@ -59,6 +80,39 @@ export function WorkerDocumentsCarousel({
         borderTop: "1px solid var(--rd-border)",
       }}
     >
+      <div style={{ display: "grid", gap: "0.75rem", marginBottom: "0.9rem" }}>
+        <h3 style={{ margin: 0 }}>Documents</h3>
+        <p style={{ margin: 0, color: "var(--rd-text-muted)" }}>
+          Verification data will be collected through the contractor validation form before dispatching details to clients.
+        </p>
+        <div style={{ display: "grid", gap: "0.65rem", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+          {documentSections.map((section) => (
+            <section
+              key={section.title}
+              style={{
+                border: "1px solid var(--rd-border)",
+                borderRadius: 8,
+                padding: "0.8rem",
+                background: "var(--rd-surface-soft)",
+              }}
+            >
+              <h4 style={{ margin: 0, fontSize: "0.92rem" }}>{section.title}</h4>
+              <p style={{ margin: "0.35rem 0 0", color: "var(--rd-text-muted)" }}>{section.body}</p>
+              <p style={{ margin: "0.35rem 0 0", fontWeight: 700 }}>
+                {section.documents.length > 0
+                  ? `${section.documents.length} document(s) stored`
+                  : "No verification documents stored yet."}
+              </p>
+            </section>
+          ))}
+        </div>
+        {/* TODO: connect these verification document buckets to the contractor validation form when that form is introduced. */}
+      </div>
+
+      {documents.length === 0 ? (
+        <p style={{ margin: 0 }}>No documents uploaded yet.</p>
+      ) : (
+        <>
       <div
         style={{
           display: "flex",
@@ -69,7 +123,6 @@ export function WorkerDocumentsCarousel({
           marginBottom: "0.75rem",
         }}
       >
-        <h3 style={{ margin: 0 }}>Documents</h3>
         <label>
           Document type
           <select
@@ -230,6 +283,8 @@ export function WorkerDocumentsCarousel({
           </div>
         </div>
       ) : null}
+        </>
+      )}
     </section>
   );
 }

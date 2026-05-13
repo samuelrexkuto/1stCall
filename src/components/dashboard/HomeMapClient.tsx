@@ -3,12 +3,15 @@
 import { divIcon, latLngBounds, Popup as LeafletPopup } from "leaflet";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { useSearchParams } from "next/navigation";
+import { Cross2Icon, InfoCircledIcon } from "@radix-ui/react-icons";
+import { Callout, Checkbox, Flex, IconButton, Select, Skeleton, Text } from "@radix-ui/themes";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
-import { OperationalMapWorkerCard } from "@/components/dashboard/home/OperationalMapWorkerCard";
 import {
   GooglePlacesAutocomplete,
   type GooglePlaceSuggestion,
 } from "@/components/forms/GooglePlacesAutocomplete";
+import { OperationalMapWorkerCard } from "@/components/dashboard/home/OperationalMapWorkerCard";
 import { WorkerProfileModal } from "@/components/workers/WorkerProfileModal";
 import { JobDetailModal, type JobOverviewRow } from "@/components/jobs/JobOverviewTable";
 import type {
@@ -22,6 +25,7 @@ import {
   getProviderFacingLocationLabel,
 } from "@/lib/provider-access";
 import { normaliseStringList } from "@/lib/stringLists";
+import { loadPlacesLibrary } from "@/lib/googleMapsLoader";
 import { CARTO_ATTRIBUTION, CARTO_POSITRON_TILE_URL } from "@/lib/maps/tiles";
 import type { WorkerOverviewRow } from "@/lib/workers/types";
 import { normaliseWorkforceGrouping } from "@/lib/workforce-grouping";
@@ -39,8 +43,9 @@ import styles from "./HomeMap.module.css";
 
 const DEFAULT_CENTER: [number, number] = [51.5074, -0.1278];
 const DEFAULT_ZOOM = 10;
-const LOCATION_FILTER_RADIUS_KM = 30;
 const RESULTS_PAGE_SIZE = 6;
+const MOBILE_ALL_WORKER_GROUP_VALUE = "all";
+const LOCATION_FILTER_RADIUS_KM = 30;
 const WORKER_GROUP_OPTIONS = [
   { value: "", label: "Select Tradesman or Contractor" },
   { value: "tradesman", label: "Tradesman" },
@@ -77,6 +82,28 @@ type Cluster = {
   longitude: number;
   count: number;
   items: Pin[];
+};
+
+type GoogleGeocoderResult = {
+  place_id?: string;
+  formatted_address?: string;
+  geometry?: {
+    location?: {
+      lat?: () => number;
+      lng?: () => number;
+    };
+  };
+};
+
+type GoogleWithGeocoder = {
+  maps: {
+    Geocoder: new () => {
+      geocode: (
+        request: { address: string; region?: string },
+        callback: (results: GoogleGeocoderResult[] | null, status: string) => void,
+      ) => void;
+    };
+  };
 };
 
 function toFiniteNumber(value: unknown): number | null {
@@ -255,9 +282,8 @@ function FlyToPlace({ target }: { target: Pick<GooglePlaceSuggestion, "latitude"
     if (!target) return;
     const safeLatLng = getSafeLatLng(target);
     if (!safeLatLng) return;
-    const size = map.getSize();
-    if (!Number.isFinite(size.x) || !Number.isFinite(size.y) || size.x <= 0 || size.y <= 0) return;
-    map.flyTo(safeLatLng, Math.max(map.getZoom(), 12), {
+
+    map.flyTo(safeLatLng, 11, {
       duration: 0.7,
     });
   }, [map, target]);
@@ -269,21 +295,18 @@ function distanceKm(
   left: Pick<Pin, "latitude" | "longitude">,
   right: Pick<GooglePlaceSuggestion, "latitude" | "longitude">,
 ) {
-  const leftLatLng = getSafeLatLng(left);
-  const rightLatLng = getSafeLatLng(right);
-  if (!leftLatLng || !rightLatLng) return Number.POSITIVE_INFINITY;
-
-  const radius = 6371;
   const toRadians = (value: number) => (value * Math.PI) / 180;
-  const dLat = toRadians(rightLatLng[0] - leftLatLng[0]);
-  const dLng = toRadians(rightLatLng[1] - leftLatLng[1]);
-  const lat1 = toRadians(leftLatLng[0]);
-  const lat2 = toRadians(rightLatLng[0]);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const earthRadiusKm = 6371;
+  const dLat = toRadians(right.latitude - left.latitude);
+  const dLng = toRadians(right.longitude - left.longitude);
+  const lat1 = toRadians(left.latitude);
+  const lat2 = toRadians(right.latitude);
 
-  return radius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function matchesWorkerGrouping(pin: WorkerPin, grouping: string) {
@@ -433,8 +456,10 @@ export function HomeMapClient({
   const [showJobs, setShowJobs] = useState(true);
   const [showWorkers, setShowWorkers] = useState(true);
   const [workerTypeFilter, setWorkerTypeFilter] = useState("");
-  const [locationQuery, setLocationQuery] = useState("");
-  const [selectedPlace, setSelectedPlace] = useState<GooglePlaceSuggestion | null>(null);
+  const [desktopWhereQuery, setDesktopWhereQuery] = useState("");
+  const [appliedDesktopWhereQuery, setAppliedDesktopWhereQuery] = useState("");
+  const [selectedDesktopPlace, setSelectedDesktopPlace] = useState<GooglePlaceSuggestion | null>(null);
+  const [selectedMobilePlace, setSelectedMobilePlace] = useState<GooglePlaceSuggestion | null>(null);
   const [workerGroupMenuOpen, setWorkerGroupMenuOpen] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(DEFAULT_ZOOM);
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
@@ -444,9 +469,13 @@ export function HomeMapClient({
   const [activeJob, setActiveJob] = useState<JobOverviewRow | null>(null);
   const [mobileMapOpen, setMobileMapOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [isDesktopViewport, setIsDesktopViewport] = useState(false);
   const [feedback, setFeedback] = useState("");
   const resultRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const workerGroupMenuRef = useRef<HTMLDivElement | null>(null);
+  const searchParams = useSearchParams();
+  const workerNameQuery = searchParams.get("workerName")?.trim() ?? "";
+  const mobileMapQuery = searchParams.get("mapQuery")?.trim() ?? "";
 
   const isJobProvider = user?.role === "job_provider";
   buildProviderAccessSeed({
@@ -470,12 +499,21 @@ export function HomeMapClient({
   });
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(max-width: 720px)");
+    const mediaQuery = window.matchMedia("(max-width: 900px)");
     const syncMobileViewport = () => setIsMobileViewport(mediaQuery.matches);
 
     syncMobileViewport();
     mediaQuery.addEventListener("change", syncMobileViewport);
     return () => mediaQuery.removeEventListener("change", syncMobileViewport);
+  }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 901px)");
+    const syncDesktopViewport = () => setIsDesktopViewport(mediaQuery.matches);
+
+    syncDesktopViewport();
+    mediaQuery.addEventListener("change", syncDesktopViewport);
+    return () => mediaQuery.removeEventListener("change", syncDesktopViewport);
   }, []);
 
   useEffect(() => {
@@ -492,9 +530,73 @@ export function HomeMapClient({
   }, [workerGroupMenuOpen]);
 
   useEffect(() => {
+    if (!isMobileViewport || !mobileMapQuery) {
+      setSelectedMobilePlace(null);
+      return;
+    }
+
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+      if (!apiKey) {
+        setSelectedMobilePlace(null);
+        return;
+      }
+
+      try {
+        const { google } = await loadPlacesLibrary(apiKey);
+        const geocoder = new (google as unknown as GoogleWithGeocoder).maps.Geocoder();
+        geocoder.geocode(
+          {
+            address: `${mobileMapQuery}, United Kingdom`,
+            region: "uk",
+          },
+          (results, status) => {
+            if (cancelled || status !== "OK") {
+              return;
+            }
+
+            const result = results?.[0];
+            const location = result?.geometry?.location;
+            const latitude = location?.lat?.();
+            const longitude = location?.lng?.();
+
+            if (!result || typeof latitude !== "number" || typeof longitude !== "number") {
+              return;
+            }
+
+            setSelectedMobilePlace({
+              placeId: result.place_id ?? mobileMapQuery,
+              display: result.formatted_address ?? mobileMapQuery,
+              formattedAddress: result.formatted_address ?? mobileMapQuery,
+              locationLabel: result.formatted_address ?? mobileMapQuery,
+              latitude,
+              longitude,
+              postcode: null,
+              locality: null,
+              administrativeArea: null,
+              country: null,
+            });
+          },
+        );
+      } catch {
+        if (!cancelled) {
+          setSelectedMobilePlace(null);
+        }
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [isMobileViewport, mobileMapQuery]);
+
+  useEffect(() => {
     const controller = new AbortController();
 
     async function loadMapData(signal?: AbortSignal) {
+      setState({ loading: true, error: "", data: null });
       try {
         const response = await fetch("/api/dashboard/map-data", {
           signal: signal ?? controller.signal,
@@ -633,16 +735,53 @@ export function HomeMapClient({
   }, [pins]);
 
   const filteredPins = useMemo(() => {
-    const normalizedLocation = locationQuery.trim().toLowerCase();
+    const normalizedWorkerName = isDesktopViewport ? "" : workerNameQuery.toLowerCase();
+    const normalizedMobileMapQuery = isMobileViewport ? mobileMapQuery.toLowerCase() : "";
+    const normalizedDesktopWhere = isDesktopViewport
+      ? appliedDesktopWhereQuery.trim().toLowerCase()
+      : "";
+
     return validPins.filter((pin) => {
       if (pin.type === "job" && !showJobs) return false;
       if (pin.type === "worker" && !showWorkers) return false;
       if (pin.type === "worker" && !matchesWorkerGrouping(pin, workerTypeFilter)) return false;
-      if (selectedPlace) return distanceKm(pin, selectedPlace) <= LOCATION_FILTER_RADIUS_KM;
-      if (!normalizedLocation) return true;
-      return pin.searchText.includes(normalizedLocation);
+
+      if (isDesktopViewport && selectedDesktopPlace) {
+        return distanceKm(pin, selectedDesktopPlace) <= LOCATION_FILTER_RADIUS_KM;
+      }
+
+      if (normalizedDesktopWhere) {
+        return pin.searchText.includes(normalizedDesktopWhere);
+      }
+
+      if (normalizedMobileMapQuery) {
+        const textMatch = pin.searchText.includes(normalizedMobileMapQuery);
+        const placeMatch = selectedMobilePlace
+          ? distanceKm(pin, selectedMobilePlace) <= LOCATION_FILTER_RADIUS_KM
+          : false;
+
+        if (!textMatch && !placeMatch) {
+          return false;
+        }
+      } else if (pin.type === "worker" && normalizedWorkerName) {
+        return pin.full_name.toLowerCase().includes(normalizedWorkerName);
+      }
+
+      return true;
     });
-  }, [validPins, locationQuery, selectedPlace, showJobs, showWorkers, workerTypeFilter]);
+  }, [
+    appliedDesktopWhereQuery,
+    isDesktopViewport,
+    isMobileViewport,
+    mobileMapQuery,
+    selectedDesktopPlace,
+    selectedMobilePlace,
+    showJobs,
+    showWorkers,
+    validPins,
+    workerNameQuery,
+    workerTypeFilter,
+  ]);
 
   const visibleWorkerPins = useMemo(
     () => filteredPins.filter((pin): pin is WorkerPin => pin.type === "worker"),
@@ -694,7 +833,17 @@ export function HomeMapClient({
 
   useEffect(() => {
     setResultsPage(1);
-  }, [workerTypeFilter, locationQuery, selectedPlace, showJobs, showWorkers]);
+    setSelectedPinId(null);
+  }, [
+    appliedDesktopWhereQuery,
+    mobileMapQuery,
+    selectedDesktopPlace,
+    selectedMobilePlace,
+    showJobs,
+    showWorkers,
+    workerNameQuery,
+    workerTypeFilter,
+  ]);
 
   useEffect(() => {
     setResultsPage((current) => Math.min(current, totalResultPages));
@@ -717,6 +866,14 @@ export function HomeMapClient({
     }),
     [resultItems],
   );
+
+  function handleDesktopWhereSearch(nextValue?: string) {
+    const value = typeof nextValue === "string" ? nextValue : desktopWhereQuery;
+
+    setAppliedDesktopWhereQuery(value.trim());
+    setSelectedPinId(null);
+    setResultsPage(1);
+  }
 
   function scrollToWorkerCard(workerId: string) {
     resultRefs.current[workerId]?.scrollIntoView({
@@ -882,7 +1039,7 @@ export function HomeMapClient({
         <MapZoomSync onZoomChange={setCurrentZoom} />
         <FitMapBounds pins={filteredPins} />
         <FlyToPin target={selectedPin} />
-        <FlyToPlace target={selectedPlace} />
+        <FlyToPlace target={isDesktopViewport ? selectedDesktopPlace : selectedMobilePlace} />
         {clusters.map((cluster) => {
           if (cluster.count === 1) {
             const pin = cluster.items[0];
@@ -1024,121 +1181,218 @@ export function HomeMapClient({
     );
   }
 
-  return (
-    <section className={styles.section}>
-      <div className={styles.header}>
-        <div>
-          <h2 className={styles.title}>Operations Map</h2>
-          <p className={styles.subtitle}>
-            {isJobProvider
-              ? "Provider-scoped workforce discovery with image-led results on one side and a live operational map on the other."
-              : "Operational jobs and workforce discovery in a richer side-by-side map workspace."}
-          </p>
+  function renderMobileLoadingState() {
+    return (
+      <div className={styles.mobileLoadingState} aria-label="Loading operations map">
+        <div className={styles.mobileTop}>
+          <Skeleton loading height="150px" width="100%">
+            <div className={styles.mobileMapPreview} />
+          </Skeleton>
+          <div className={styles.mobileControls}>
+            <Skeleton loading height="64px" width="100%">
+              <div className={styles.mobileSelectWrap} />
+            </Skeleton>
+            <div className={styles.mobileLegend}>
+              <Skeleton loading height="28px" width="92px" />
+              <Skeleton loading height="28px" width="72px" />
+            </div>
+          </div>
+        </div>
+        <div className={styles.mobileResultsGrid}>
+          <div className={styles.mobileCarouselRow} aria-label="Loading map results row 1">
+            {[0, 1].map((index) => (
+              <div key={`mobile-result-skeleton-top-${index}`} className={styles.mobileResultCard}>
+                <Skeleton loading height="132px" width="100%" />
+                <div className={styles.mobileResultBody}>
+                  <Skeleton loading height="16px" width="78%" />
+                  <Skeleton loading height="13px" width="62%" />
+                  <Skeleton loading height="13px" width="52%" />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className={styles.mobileCarouselRow} aria-label="Loading map results row 2">
+            {[0, 1].map((index) => (
+              <div key={`mobile-result-skeleton-bottom-${index}`} className={styles.mobileResultCard}>
+                <Skeleton loading height="132px" width="100%" />
+                <div className={styles.mobileResultBody}>
+                  <Skeleton loading height="16px" width="72%" />
+                  <Skeleton loading height="13px" width="58%" />
+                  <Skeleton loading height="13px" width="46%" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
+    );
+  }
 
-      <div className={styles.controls}>
-        <div className={styles.mapFilterBar}>
-          <div className={styles.workerGroupSelect} ref={workerGroupMenuRef}>
-            <button
-              type="button"
-              className={styles.workerGroupButton}
-              aria-haspopup="listbox"
-              aria-expanded={workerGroupMenuOpen}
-              onClick={() => setWorkerGroupMenuOpen((current) => !current)}
+  return (
+    <section className={`${styles.section} rd-operations-section`}>
+      <div className={`${styles.header} rd-operations-header`}>
+        <div>
+          <h2 className={`${styles.title} rd-operations-title`}>Operations Map</h2>
+          <p className={`rd-operations-description ${styles.desktopOperationsDescription}`}>
+            Provider-scoped workforce discovery with image-led results on one side and a live operational map on the other.
+          </p>
+          <div className={styles.mobileOperationsDescription}>
+            <Callout.Root
+              color="gray"
+              variant="surface"
+              size="2"
+              className={`${styles.operationsMapCallout} mobile-info-callout`}
             >
-              <span>{getWorkerGroupLabel(workerTypeFilter)}</span>
-              <span className={styles.workerGroupChevron} aria-hidden="true" />
-            </button>
-            {workerGroupMenuOpen ? (
-              <div className={styles.workerGroupMenu} role="listbox">
-                {WORKER_GROUP_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    role="option"
-                    aria-selected={workerTypeFilter === option.value}
-                    className={styles.workerGroupOption}
-                    onClick={() => {
-                      setWorkerTypeFilter(option.value);
-                      setResultsPage(1);
-                      setWorkerGroupMenuOpen(false);
-                    }}
-                  >
-                    {workerTypeFilter === option.value ? <span aria-hidden="true">✓</span> : <span />}
-                    <span>{option.label}</span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-          <div className={styles.locationWrap}>
-            <GooglePlacesAutocomplete
-              label="Where"
-              hideLabel
-              value={locationQuery}
-              placeholder="Where?"
-              onChange={(value) => {
-                setLocationQuery(value);
-                setSelectedPlace(null);
-                setResultsPage(1);
-              }}
-              onSelect={(suggestion) => {
-                setSelectedPlace(suggestion);
-                setLocationQuery(suggestion.locationLabel || suggestion.display);
-                setSelectedPinId(null);
-                setResultsPage(1);
-              }}
-              inputStyle={{
-                width: "100%",
-                minHeight: "2.55rem",
-                border: "none",
-                borderRadius: 0,
-                background: "transparent",
-                color: "var(--rd-input-text)",
-                padding: "0.62rem 0.75rem 0.62rem 2rem",
-                fontSize: "0.88rem",
-                lineHeight: 1.2,
-                boxShadow: "none",
-              }}
-            />
+              <Callout.Icon>
+                <InfoCircledIcon />
+              </Callout.Icon>
+              <Callout.Text>
+                Provider-scoped workforce discovery with image-led results on one side and a live operational map on the other.
+              </Callout.Text>
+            </Callout.Root>
           </div>
         </div>
-        <label className={styles.toggleLabel}>
-          <input
-            type="checkbox"
-            checked={showWorkers}
-            onChange={(event) => {
-              setShowWorkers(event.target.checked);
-              setResultsPage(1);
-            }}
-            className={styles.toggleInput}
-          />
-          <span className={`${styles.legendDot} ${styles.workerDot}`} />
-          Workers
-        </label>
-        <label className={styles.toggleLabel}>
-          <input
-            type="checkbox"
-            checked={showJobs}
-            onChange={(event) => {
-              setShowJobs(event.target.checked);
-              setResultsPage(1);
-            }}
-            className={styles.toggleInput}
-          />
-          <span className={`${styles.legendDot} ${styles.jobDot}`} />
-          Jobs
-        </label>
       </div>
 
       {feedback ? <div className={styles.infoBanner}>{feedback}</div> : null}
       {state.error ? <div className={styles.infoBanner}>{state.error}</div> : null}
       {state.loading ? <div className={styles.infoBanner}>Loading map data…</div> : null}
       {state.data?.message ? <p className={styles.helperText}>{state.data.message}</p> : null}
+      {state.loading ? renderMobileLoadingState() : null}
 
       {!state.loading && !state.error && state.data ? (
         <>
+        {!isMobileViewport ? (
+        <div className="rd-operations-grid">
+          <div className="rd-operations-map-column">
+            <div className="rd-operations-map-wrap rd-mini-map-shell">
+              <div className={`${styles.mapFrame} rd-home-surface-transparent`}>
+                <div className={styles.mapCanvas}>
+                  {renderMapCanvas()}
+                </div>
+              </div>
+            </div>
+            <div className={styles.mapMetaPanel}>
+              <span>Visible pins: {filteredPins.length}</span>
+              <span>Missing coordinates: {state.data.missing_coordinates.jobs} job(s), {state.data.missing_coordinates.workers} worker(s)</span>
+            </div>
+            <div className={styles.desktopToggleRow}>
+              <label className={styles.toggleLabel}>
+                <input
+                  type="checkbox"
+                  checked={showWorkers}
+                  onChange={(event) => {
+                    setShowWorkers(event.target.checked);
+                    setResultsPage(1);
+                  }}
+                  className={styles.toggleInput}
+                />
+                <span className={`${styles.legendDot} ${styles.workerDot}`} />
+                Workers
+              </label>
+              <label className={styles.toggleLabel}>
+                <input
+                  type="checkbox"
+                  checked={showJobs}
+                  onChange={(event) => {
+                    setShowJobs(event.target.checked);
+                    setResultsPage(1);
+                  }}
+                  className={styles.toggleInput}
+                />
+                <span className={`${styles.legendDot} ${styles.jobDot}`} />
+                Jobs
+              </label>
+            </div>
+          </div>
+
+          <div className="rd-operations-controls-column rd-map-controls-shell">
+            <div className="rd-desktop-map-controls">
+              <div className={`${styles.workerGroupSelect} rd-field`} ref={workerGroupMenuRef}>
+                <span className="rd-field-label">Type</span>
+                <button
+                  type="button"
+                  className={styles.workerGroupButton}
+                  aria-haspopup="listbox"
+                  aria-expanded={workerGroupMenuOpen}
+                  onClick={() => setWorkerGroupMenuOpen((current) => !current)}
+                >
+                  <span>{getWorkerGroupLabel(workerTypeFilter)}</span>
+                  <span className={styles.workerGroupChevron} aria-hidden="true" />
+                </button>
+                {workerGroupMenuOpen ? (
+                  <div className={styles.workerGroupMenu} role="listbox">
+                    {WORKER_GROUP_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="option"
+                        aria-selected={workerTypeFilter === option.value}
+                        className={styles.workerGroupOption}
+                        onClick={() => {
+                          setWorkerTypeFilter(option.value);
+                          setResultsPage(1);
+                          setWorkerGroupMenuOpen(false);
+                        }}
+                      >
+                        {workerTypeFilter === option.value ? <span aria-hidden="true">✓</span> : <span />}
+                        <span>{option.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              <label className="rd-field rd-desktop-where-field rd-desktop-only">
+                <span className="rd-field-label">Where?</span>
+                <div className="rd-desktop-where-search">
+                  <div className={styles.locationWrap}>
+                    <GooglePlacesAutocomplete
+                      label="Where"
+                      hideLabel
+                      value={desktopWhereQuery}
+                      placeholder="Town, area, or postcode"
+                      onChange={(value) => {
+                        setDesktopWhereQuery(value);
+                        setSelectedDesktopPlace(null);
+                      }}
+                      onSelect={(suggestion) => {
+                        const nextValue = suggestion.locationLabel || suggestion.display;
+                        setSelectedDesktopPlace(suggestion);
+                        setDesktopWhereQuery(nextValue);
+                        setAppliedDesktopWhereQuery(nextValue);
+                        setSelectedPinId(null);
+                        setResultsPage(1);
+                      }}
+                      inputStyle={{
+                        width: "100%",
+                        minHeight: "2.55rem",
+                        border: "none",
+                        borderRadius: 0,
+                        background: "transparent",
+                        color: "var(--rd-input-text)",
+                        padding: "0.62rem 0.75rem 0.62rem 2rem",
+                        fontSize: "0.88rem",
+                        lineHeight: 1.2,
+                        boxShadow: "none",
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    className="rd-button rd-desktop-where-button"
+                    type="button"
+                    onClick={() => handleDesktopWhereSearch()}
+                  >
+                    Search
+                  </button>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+        ) : null}
+
         {isMobileViewport ? (
         <div className={styles.mobileTop}>
           <div className={styles.mobileMapPreview}>
@@ -1156,92 +1410,71 @@ export function HomeMapClient({
           </div>
 
           <div className={styles.mobileControls}>
-            <label className={styles.mobileSelectWrap}>
-              <span className={styles.mobileControlLabel}>Type</span>
-              <select
-                value={workerTypeFilter}
-                onChange={(event) => {
-                  setWorkerTypeFilter(event.target.value);
+            <div className={styles.mobileTypeSelectWrapper}>
+              <Select.Root
+                value={workerTypeFilter || MOBILE_ALL_WORKER_GROUP_VALUE}
+                onValueChange={(value) => {
+                  setWorkerTypeFilter(value === MOBILE_ALL_WORKER_GROUP_VALUE ? "" : value);
                   setResultsPage(1);
                 }}
-                className={styles.mobileSelect}
               >
-                {WORKER_GROUP_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className={styles.mobileSearchWrap}>
-              <GooglePlacesAutocomplete
-                label="Where"
-                hideLabel
-                value={locationQuery}
-                placeholder="Where?"
-                onChange={(value) => {
-                  setLocationQuery(value);
-                  setSelectedPlace(null);
-                  setResultsPage(1);
-                }}
-                onSelect={(suggestion) => {
-                  setSelectedPlace(suggestion);
-                  setLocationQuery(suggestion.locationLabel || suggestion.display);
-                  setSelectedPinId(null);
-                  setResultsPage(1);
-                }}
-                inputStyle={{
-                  width: "100%",
-                  minHeight: "2.7rem",
-                  border: "none",
-                  borderRadius: 16,
-                  background: "transparent",
-                  color: "var(--rd-input-text)",
-                  padding: "0.58rem 0.7rem",
-                  fontSize: "0.84rem",
-                  lineHeight: 1.2,
-                  boxShadow: "none",
-                }}
-              />
+                <Select.Trigger
+                  aria-label="Filter operations map by workforce type"
+                  className={styles.mobileTypeSelectTrigger}
+                  placeholder="Select Tradesman or Contractor"
+                />
+                <Select.Content position="popper">
+                  {WORKER_GROUP_OPTIONS.map((option) => (
+                    <Select.Item
+                      key={option.value || MOBILE_ALL_WORKER_GROUP_VALUE}
+                      value={option.value || MOBILE_ALL_WORKER_GROUP_VALUE}
+                    >
+                      {option.label}
+                    </Select.Item>
+                  ))}
+                </Select.Content>
+              </Select.Root>
             </div>
+            <Flex align="center" gap="4" className={styles.mobileLegend}>
+              <Text as="label" size="2" className={styles.legendItem}>
+                <Flex as="span" align="center" gap="2">
+                  <Checkbox
+                    checked={showWorkers}
+                    onCheckedChange={(checked) => {
+                      setShowWorkers(checked === true);
+                      setResultsPage(1);
+                    }}
+                    color="blue"
+                    variant="soft"
+                    size="2"
+                  />
+                  <span className={`${styles.legendDot} ${styles.workerDot}`} />
+                  Workers
+                </Flex>
+              </Text>
+              <Text as="label" size="2" className={styles.legendItem}>
+                <Flex as="span" align="center" gap="2">
+                  <Checkbox
+                    checked={showJobs}
+                    onCheckedChange={(checked) => {
+                      setShowJobs(checked === true);
+                      setResultsPage(1);
+                    }}
+                    color="red"
+                    variant="soft"
+                    size="2"
+                  />
+                  <span className={`${styles.legendDot} ${styles.jobDot}`} />
+                  Jobs
+                </Flex>
+              </Text>
+            </Flex>
           </div>
         </div>
         ) : null}
 
-        {isMobileViewport ? (
-        <div className={styles.mobileToggleRow}>
-          <label className={styles.toggleLabel}>
-            <input
-              type="checkbox"
-              checked={showWorkers}
-              onChange={(event) => {
-                setShowWorkers(event.target.checked);
-                setResultsPage(1);
-              }}
-              className={styles.toggleInput}
-            />
-            <span className={`${styles.legendDot} ${styles.workerDot}`} />
-            Workers
-          </label>
-          <label className={styles.toggleLabel}>
-            <input
-              type="checkbox"
-              checked={showJobs}
-              onChange={(event) => {
-                setShowJobs(event.target.checked);
-                setResultsPage(1);
-              }}
-              className={styles.toggleInput}
-            />
-            <span className={`${styles.legendDot} ${styles.jobDot}`} />
-            Jobs
-          </label>
-        </div>
-        ) : null}
-
         <div className={styles.splitLayout}>
-          <div className={styles.resultsColumn}>
+          <div className={`${styles.resultsColumn} rd-map-results-shell`}>
             <div className={styles.resultsHeader}>
               <div>
                 <h3 className={styles.resultsTitle}>Map Results</h3>
@@ -1269,7 +1502,7 @@ export function HomeMapClient({
                     </div>
                   ) : null}
                 </div>
-                <div className={styles.resultsGrid}>
+                <div className={`${styles.resultsGrid} rd-map-results-grid`}>
                   {pagedResults.map((item) =>
                     item.type === "worker" ? (
                       <div
@@ -1328,23 +1561,6 @@ export function HomeMapClient({
               </>
             )}
           </div>
-
-          {!isMobileViewport ? (
-          <div className={styles.mapColumn}>
-            <div className={styles.mapSticky}>
-              <div className={styles.mapFrame}>
-                <div className={styles.mapCanvas}>
-                  {renderMapCanvas()}
-                </div>
-              </div>
-
-              <div className={styles.mapMetaPanel}>
-                <span>Visible pins: {filteredPins.length}</span>
-                <span>Missing coordinates: {state.data.missing_coordinates.jobs} job(s), {state.data.missing_coordinates.workers} worker(s)</span>
-              </div>
-            </div>
-          </div>
-          ) : null}
         </div>
         </>
       ) : null}
@@ -1353,14 +1569,16 @@ export function HomeMapClient({
         <div className={styles.mobileMapOverlay} role="dialog" aria-modal="true" aria-label="Operations map">
           <div className={styles.mobileMapOverlayHeader}>
             <strong>Operations Map</strong>
-            <button
-              type="button"
+            <IconButton
               onClick={() => setMobileMapOpen(false)}
               aria-label="Close operations map"
               className={styles.mobileMapCloseButton}
+              variant="soft"
+              radius="full"
+              size="2"
             >
-              Close
-            </button>
+              <Cross2Icon />
+            </IconButton>
           </div>
           <div className={styles.mobileMapOverlayBody}>
             {renderMapCanvas()}

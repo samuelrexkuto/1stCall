@@ -2,6 +2,8 @@
 
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Cross2Icon } from "@radix-ui/react-icons";
+import { IconButton } from "@radix-ui/themes";
 
 interface ModalProps {
   open: boolean;
@@ -57,14 +59,17 @@ export function Modal({ open, title, onClose, children }: ModalProps) {
       >
         <div className="rd-modal-header">
           <h2 className="rd-modal-title">{title}</h2>
-          <button
+          <IconButton
             type="button"
-            aria-label="Close modal"
+            aria-label="Close"
             onClick={onClose}
             className="rd-modal-close"
+            variant="soft"
+            radius="full"
+            size="2"
           >
-            Close
-          </button>
+            <Cross2Icon />
+          </IconButton>
         </div>
         <div className="rd-modal-body">{children}</div>
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Badge, Button, ScrollArea } from "@radix-ui/themes";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { Modal } from "@/components/ui/Modal";
 import { TenderConfidencePackPreview } from "@/components/workers/TenderConfidencePackPreview";
@@ -18,6 +19,15 @@ function metricValue(value: number | null) {
 function topWorkerIds(workers: WorkerOverviewRow[], selector: (worker: WorkerOverviewRow) => number) {
   const highest = Math.max(...workers.map(selector));
   return new Set(workers.filter((worker) => selector(worker) === highest).map((worker) => worker.worker_id));
+}
+
+function CompareField({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="mobile-compare-field">
+      <div className="mobile-compare-field-label">{label}</div>
+      <div className="mobile-compare-field-value">{value}</div>
+    </div>
+  );
 }
 
 export function CompareContractorsModal({
@@ -52,6 +62,7 @@ export function CompareContractorsModal({
   return (
     <Modal open={open} title="Compare Contractors / Tradesmen" onClose={onClose}>
       <div
+        className="compare-contractors-desktop-content"
         style={{
           display: "grid",
           gap: "1rem",
@@ -148,6 +159,100 @@ export function CompareContractorsModal({
             );
           })()
         ))}
+      </div>
+      <div className="compare-contractors-mobile-content job-detail-modal-content">
+        <ScrollArea type="auto" scrollbars="horizontal" className="mobile-compare-carousel-scroll">
+          <div className="mobile-compare-carousel-track">
+            {workers.map((worker) => {
+              const displayName = isLimitedProviderView
+                ? getProviderFacingDisplayName(worker)
+                : worker.full_name;
+              const locationLabel = isLimitedProviderView
+                ? getProviderFacingLocationLabel(worker)
+                : worker.location_display ?? `${worker.town ?? "-"} / ${worker.postcode}`;
+              const workforceType = worker.workerType === "contractor" ? "Contractor" : "Tradesman";
+              const isExpanded = expandedPackId === worker.worker_id;
+              const scoreFields = worker.stathub.status !== "insufficient"
+                ? [
+                    ["Site Score overall", metricValue(worker.stathub.overallScore)],
+                    ["Reliability", metricValue(worker.stathub.reliabilityScore)],
+                    ["Site Conduct", metricValue(worker.stathub.siteConductScore)],
+                    ["Work Quality", metricValue(worker.stathub.workQualityScore)],
+                  ] as Array<[string, string | number]>
+                : [];
+
+              return (
+                <section key={worker.worker_id} className="mobile-compare-card">
+                  <div className="mobile-compare-card-header">
+                    <h3 className="mobile-compare-card-title">{displayName}</h3>
+                    <p className="mobile-compare-meta">
+                      {workforceType} | {locationLabel}
+                    </p>
+                  </div>
+
+                  <div className="mobile-compare-badges" aria-label="Comparison highlights">
+                    {bestReliability.has(worker.worker_id) ? <Badge size="1" color="green" variant="soft">Best Reliability</Badge> : null}
+                    {bestWorkQuality.has(worker.worker_id) ? <Badge size="1" color="blue" variant="soft">Best Work Quality</Badge> : null}
+                    {mostPlatformJobHistory.has(worker.worker_id) ? <Badge size="1" color="orange" variant="soft">Most Platform Job History</Badge> : null}
+                  </div>
+
+                  <div className="mobile-compare-field-list">
+                    <CompareField label="Workforce type" value={workforceType} />
+                    {worker.contractorType ? (
+                      <CompareField
+                        label="Contractor type"
+                        value={worker.contractorType === "multi_discipline" ? "Multi-Discipline" : "Specialist"}
+                      />
+                    ) : null}
+                    {worker.workerType === "contractor" ? (
+                      <CompareField label="Specialist Area" value={worker.specialistArea ?? "Not recorded"} />
+                    ) : (
+                      <CompareField label="Skill Tag" value={worker.skillTag ?? "Not recorded"} />
+                    )}
+                    <CompareField label="Avg Response Time" value={worker.avgResponseTimeLabel ?? "Not recorded"} />
+                    <CompareField label="Languages Spoken" value={worker.languagesSpoken.length > 0 ? worker.languagesSpoken.join(", ") : "Not provided"} />
+                    <CompareField label="Site Score status" value={getSiteScoreStatusLabel(worker.stathub.status)} />
+                    {scoreFields.map(([label, value]) => (
+                      <CompareField key={label} label={label} value={value} />
+                    ))}
+                    {worker.stathub.status === "insufficient" ? (
+                      <p className="mobile-compare-note">
+                        Score confidence is still building through verified completed jobs, review evidence, and portfolio-backed proof.
+                      </p>
+                    ) : null}
+                    <CompareField label="Completed platform jobs" value={worker.stathub.verifiedBookingsCount} />
+                    <CompareField label="Credentials" value={worker.credentialsSummary.length ? worker.credentialsSummary.join(", ") : "Not provided"} />
+                    <CompareField label="Portfolio" value={worker.portfolio.length > 0 ? worker.portfolio.map((item) => item.title).join(", ") : "No portfolio highlights yet"} />
+                  </div>
+
+                  <div className="mobile-compare-actions">
+                    <Button type="button" size="1" radius="full" variant="surface" onClick={() => onViewProfile(worker)}>
+                      View profile
+                    </Button>
+                    <Button
+                      type="button"
+                      size="1"
+                      radius="full"
+                      variant="surface"
+                      aria-label={isExpanded ? "Hide tender confidence pack" : "View tender confidence pack"}
+                      onClick={() =>
+                        setExpandedPackId((current) => (current === worker.worker_id ? null : worker.worker_id))
+                      }
+                    >
+                      {isExpanded ? "Hide pack" : "Tender pack"}
+                    </Button>
+                  </div>
+
+                  {isExpanded ? (
+                    <div className="mobile-compare-pack">
+                      <TenderConfidencePackPreview worker={worker} defaultOpen mode={mode} />
+                    </div>
+                  ) : null}
+                </section>
+              );
+            })}
+          </div>
+        </ScrollArea>
       </div>
     </Modal>
   );

@@ -397,6 +397,9 @@ export function BroadcastModal({
             <label style={{ display: "block", marginBottom: "0.45rem" }}>
               <input type="checkbox" checked={channels.includes("sms")} onChange={() => toggleChannel("sms")} /> Text
             </label>
+            <label style={{ display: "block", marginBottom: "0.45rem" }}>
+              <input type="checkbox" checked={channels.includes("email")} onChange={() => toggleChannel("email")} /> Email
+            </label>
             <label style={{ display: "block" }}>
               <input type="checkbox" checked={channels.includes("ivr")} onChange={() => toggleChannel("ivr")} /> Call
             </label>

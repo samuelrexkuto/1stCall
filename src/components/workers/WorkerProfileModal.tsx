@@ -2,11 +2,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {
+  CalendarIcon,
+  CheckCircledIcon,
+  EnvelopeClosedIcon,
+  IdCardIcon,
+  MobileIcon,
+  PersonIcon,
+  ReaderIcon,
+  SewingPinIcon,
+} from "@radix-ui/react-icons";
+import { Box, ScrollArea, Tabs } from "@radix-ui/themes";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { Modal } from "@/components/ui/Modal";
 import { SaveWorkerButton } from "@/components/workers/SaveWorkerButton";
 import { SiteScoreCard } from "@/components/workers/SiteScoreCard";
-import { TenderConfidencePackPreview } from "@/components/workers/TenderConfidencePackPreview";
 import { WorkerDocumentsCarousel } from "@/components/workers/WorkerDocumentsCarousel";
 import { WorkerPerformanceSummary } from "@/components/workers/WorkerPerformanceSummary";
 import { WorkerPortfolioSection } from "@/components/workers/WorkerPortfolioSection";
@@ -31,11 +41,57 @@ const baseProfileTabs = [
   "Performance Summary",
   "Portfolio",
   "Credentials / Compliance",
-  "Tender Confidence Pack",
   "Documents",
 ] as const;
 
 type ProfileTab = (typeof baseProfileTabs)[number];
+
+function getWorkerDetailIcon(label: string) {
+  const normalized = label.toLowerCase();
+  if (normalized.includes("mobile") || normalized.includes("whatsapp")) return <MobileIcon />;
+  if (normalized.includes("email")) return <EnvelopeClosedIcon />;
+  if (normalized.includes("location")) return <SewingPinIcon />;
+  if (normalized.includes("role") || normalized.includes("grouping") || normalized.includes("workforce") || normalized.includes("contractor")) return <PersonIcon />;
+  if (normalized.includes("response") || normalized.includes("jobs")) return <CalendarIcon />;
+  if (normalized.includes("languages")) return <ReaderIcon />;
+  if (normalized.includes("verified")) return <CheckCircledIcon />;
+  return <IdCardIcon />;
+}
+
+function formatProfileTabLabel(tab: ProfileTab) {
+  if (tab === "Site Score presented by StatHub") return "Site Score";
+  if (tab === "Performance Summary") return "Performance";
+  if (tab === "Credentials / Compliance") return "Credentials";
+  return tab;
+}
+
+function WorkerDetailField({ label, value }: { label: string; value: string | number | boolean | null | undefined }) {
+  return (
+    <div className="rd-detail-field">
+      <div className="rd-detail-label">
+        <span className="rd-detail-label-icon" aria-hidden="true">{getWorkerDetailIcon(label)}</span>
+        <span>{label}</span>
+      </div>
+      <div className="rd-detail-value">{value ?? "Not provided"}</div>
+    </div>
+  );
+}
+
+function WorkerDetailGrid({
+  fields,
+  className = "",
+}: {
+  fields: Array<[string, string | number | boolean | null | undefined]>;
+  className?: string;
+}) {
+  return (
+    <div className={`rd-detail-grid${className ? ` ${className}` : ""}`}>
+      {fields.map(([label, value]) => (
+        <WorkerDetailField key={label} label={label} value={value} />
+      ))}
+    </div>
+  );
+}
 
 export function WorkerProfileModal({
   worker,
@@ -176,7 +232,8 @@ export function WorkerProfileModal({
       onClose={onClose}
     >
       {worker ? (
-        <div style={{ display: "grid", gap: "0.85rem" }}>
+        <>
+        <div className="worker-detail-desktop-content" style={{ display: "grid", gap: "0.85rem" }}>
           {blockedMessage ? (
             <section
               style={{
@@ -364,9 +421,6 @@ export function WorkerProfileModal({
               {activeTab === "Performance Summary" ? <WorkerPerformanceSummary worker={worker} /> : null}
               {activeTab === "Portfolio" ? <WorkerPortfolioSection worker={worker} /> : null}
               {activeTab === "Credentials / Compliance" ? <WorkerCredentialsComplianceSection worker={worker} /> : null}
-              {activeTab === "Tender Confidence Pack" ? (
-                <TenderConfidencePackPreview worker={worker} defaultOpen mode={mode} />
-              ) : null}
               {activeTab === "Documents" ? (
                 <>
                   {documentsError ? <p style={{ margin: 0 }}>{documentsError}</p> : null}
@@ -390,6 +444,108 @@ export function WorkerProfileModal({
             {mode === "admin" ? <Link href={`/workers/${worker.worker_id}/edit`}>Edit Worker</Link> : null}
           </section>
         </div>
+        <div className="worker-detail-mobile-content job-detail-modal-content">
+          {blockedMessage ? (
+            <section className="job-detail-static-section worker-detail-mobile-warning">
+              <h3 className="job-detail-static-title">Profile preview limit reached</h3>
+              <p style={{ margin: 0 }}>{blockedMessage}</p>
+            </section>
+          ) : null}
+
+          {!blockedMessage ? (() => {
+            const grouping = getWorkerDisplayGrouping(worker);
+            const limitedTitle = `${grouping.typeLabel}: ${getProviderFacingDisplayName(worker)}`;
+            const detailItems: Array<[string, string]> = [
+              ["Mobile", isLimitedProviderView ? maskPhone(worker.phone) : worker.phone ?? "-"],
+              ["WhatsApp", isLimitedProviderView ? maskPhone(worker.whatsapp_number) : worker.whatsapp_number ?? "-"],
+              ["Email", isLimitedProviderView ? maskEmail(worker.email) : worker.email ?? "-"],
+              ["Grouping", grouping.typeLabel],
+              [grouping.detailLabel, grouping.detailValue],
+              ["Workforce Type", grouping.typeLabel],
+              [
+                "Location",
+                isLimitedProviderView
+                  ? getProviderFacingLocationLabel(worker)
+                  : worker.location_display ?? `${worker.town ?? "-"} / ${worker.postcode}`,
+              ],
+              ["Avg Response Time", worker.avgResponseTimeLabel ?? "Not recorded"],
+              ["Languages Spoken", worker.languagesSpoken.length ? worker.languagesSpoken.join(", ") : "Not provided"],
+              ["Verified Completed Jobs", String(worker.statHubMeta.verifiedCompletedJobsCount)],
+            ];
+
+            if (worker.workerType === "contractor") {
+              detailItems.splice(6, 0, [
+                "Contractor Type",
+                worker.contractorType
+                  ? worker.contractorType === "multi_discipline"
+                    ? "Multi-Discipline"
+                    : "Specialist"
+                  : "Not recorded",
+              ]);
+            }
+
+            return (
+              <>
+                <section className="job-detail-static-section">
+                  <h3 className="job-detail-static-title">{grouping.typeLabel} Summary</h3>
+                  {isLimitedProviderView ? (
+                    <p className="worker-detail-mobile-note">
+                      {limitedTitle}. Provider-side review keeps direct contact details and precise address masked until the platform coordinates the next stage.
+                    </p>
+                  ) : null}
+                  <WorkerDetailGrid className="job-detail-summary-grid" fields={detailItems} />
+                </section>
+
+                <section className="job-detail-mobile-tabs-shell" aria-label="Worker profile sections">
+                  <Tabs.Root value={activeTab} onValueChange={(value) => setActiveTab(value as ProfileTab)} className="job-detail-mobile-tabs">
+                    <ScrollArea type="auto" scrollbars="horizontal" className="job-detail-mobile-tabs-scroll">
+                      <Tabs.List className="job-detail-mobile-tabs-list">
+                        {profileTabs.map((tab) => (
+                          <Tabs.Trigger key={tab} value={tab}>
+                            {formatProfileTabLabel(tab)}
+                          </Tabs.Trigger>
+                        ))}
+                      </Tabs.List>
+                    </ScrollArea>
+
+                    <Box className="job-detail-mobile-dynamic-card worker-detail-mobile-tab-card">
+                      <Tabs.Content value="Site Score presented by StatHub" className="job-detail-mobile-tab-content">
+                        <SiteScoreCard worker={worker} />
+                      </Tabs.Content>
+                      <Tabs.Content value="Performance Summary" className="job-detail-mobile-tab-content">
+                        <WorkerPerformanceSummary worker={worker} />
+                      </Tabs.Content>
+                      <Tabs.Content value="Portfolio" className="job-detail-mobile-tab-content">
+                        <WorkerPortfolioSection worker={worker} />
+                      </Tabs.Content>
+                      <Tabs.Content value="Credentials / Compliance" className="job-detail-mobile-tab-content">
+                        <WorkerCredentialsComplianceSection worker={worker} />
+                      </Tabs.Content>
+                      <Tabs.Content value="Documents" className="job-detail-mobile-tab-content">
+                        {documentsError ? <p style={{ margin: 0 }}>{documentsError}</p> : null}
+                        {documentsLoading ? <p style={{ margin: 0 }}>Loading documents...</p> : null}
+                        {!documentsLoading && !documentsError ? (
+                          <WorkerDocumentsCarousel documents={workerDocuments} />
+                        ) : null}
+                      </Tabs.Content>
+                    </Box>
+                  </Tabs.Root>
+                </section>
+
+                <section className="worker-detail-mobile-actions">
+                  <SaveWorkerButton worker={worker} />
+                  {onBroadcast ? (
+                    <button type="button" onClick={() => onBroadcast(worker)}>
+                      Broadcast / Dispatch
+                    </button>
+                  ) : null}
+                  {mode === "admin" ? <Link href={`/workers/${worker.worker_id}/edit`}>Edit Worker</Link> : null}
+                </section>
+              </>
+            );
+          })() : null}
+        </div>
+        </>
       ) : null}
     </Modal>
   );

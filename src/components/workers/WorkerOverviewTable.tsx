@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Box, Checkbox, ScrollArea, Table } from "@radix-ui/themes";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { CompareContractorsModal } from "@/components/workers/CompareContractorsModal";
 import { SaveWorkerButton } from "@/components/workers/SaveWorkerButton";
@@ -38,6 +39,7 @@ export function WorkerOverviewTable({
   onDeleteSuccess,
   mode = "admin",
   providerAccessSeed,
+  mobileFilterControls,
 }: {
   workers: WorkerOverviewRow[];
   jobs: DispatchJobOption[];
@@ -46,6 +48,7 @@ export function WorkerOverviewTable({
   onDeleteSuccess?: (workerId: string) => void;
   mode?: "admin" | "job_provider";
   providerAccessSeed?: ProviderAccessSeed & { providerId: string; email: string | null; name: string };
+  mobileFilterControls?: ReactNode;
 }) {
   const router = useRouter();
   const { user } = useAuthSession();
@@ -143,13 +146,6 @@ export function WorkerOverviewTable({
       current.includes(workerId)
         ? current.filter((id) => id !== workerId)
         : [...current, workerId],
-    );
-  }
-
-  function toggleSelectAll() {
-    setSelectionMessage("");
-    setSelectedIds((current) =>
-      current.length === workers.length ? [] : workers.map((worker) => worker.worker_id),
     );
   }
 
@@ -261,6 +257,21 @@ export function WorkerOverviewTable({
 
   return (
     <>
+      <div className="mobile-workforce-action-row">
+        {mobileFilterControls}
+        {isJobProvider ? (
+          <button
+            type="button"
+            disabled={selectedIds.length === 0 || providerEntitlements?.canRequestDispatch === false}
+            onClick={handleRequestDispatch}
+          >
+            Request Dispatch
+          </button>
+        ) : null}
+        <button type="button" onClick={handleCompare}>
+          Compare
+        </button>
+      </div>
       <div
         style={{
           display: "flex",
@@ -272,9 +283,10 @@ export function WorkerOverviewTable({
         }}
       >
         <p style={{ margin: 0 }}>Selected workforce: {selectedIds.length}</p>
-        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+        <div className="workforce-desktop-action-buttons" style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
           {isJobProvider && providerAccessState ? (
             <div
+              className="workforce-access-summary-pill"
               style={{
                 padding: "0.55rem 0.8rem",
                 borderRadius: 999,
@@ -313,7 +325,8 @@ export function WorkerOverviewTable({
             </button>
           ) : null}
           <button type="button" onClick={handleCompare}>
-            Compare Contractors / Tradesmen
+            <span className="desktop-compare-label">Compare Contractors / Tradesmen</span>
+            <span className="mobile-compare-label">Compare</span>
           </button>
         </div>
       </div>
@@ -327,7 +340,7 @@ export function WorkerOverviewTable({
         </p>
       ) : null}
 
-      <div style={{ overflowX: "auto" }}>
+      <div className="desktop-overview-table-shell" style={{ overflowX: "auto" }}>
         <table
           style={{
             width: "100%",
@@ -338,11 +351,22 @@ export function WorkerOverviewTable({
           <thead>
             <tr>
               <th style={{ textAlign: "left", padding: "0.75rem", borderBottom: "1px solid var(--rd-border)" }}>
-                <input
-                  type="checkbox"
-                  checked={displayWorkers.length > 0 && selectedIds.length === displayWorkers.length}
-                  onChange={toggleSelectAll}
+                <Checkbox
+                  checked={
+                    displayWorkers.length > 0 && selectedIds.length === displayWorkers.length
+                      ? true
+                      : selectedIds.length > 0
+                        ? "indeterminate"
+                        : false
+                  }
+                  onCheckedChange={(checked) => {
+                    setSelectionMessage("");
+                    setSelectedIds(checked === true ? displayWorkers.map((worker) => worker.worker_id) : []);
+                  }}
                   aria-label="Select all workers"
+                  color="blue"
+                  variant="soft"
+                  size="2"
                 />
               </th>
               <th style={{ textAlign: "left", padding: "0.75rem", borderBottom: "1px solid var(--rd-border)" }}>Name</th>
@@ -358,11 +382,13 @@ export function WorkerOverviewTable({
             {displayWorkers.map((worker) => (
               <tr key={worker.worker_id}>
                 <td style={{ padding: "0.75rem", borderBottom: "1px solid var(--rd-border)" }}>
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={selectedIds.includes(worker.worker_id)}
-                    onChange={() => toggleSelection(worker.worker_id)}
+                    onCheckedChange={() => toggleSelection(worker.worker_id)}
                     aria-label={`Select ${worker.full_name}`}
+                    color="blue"
+                    variant="soft"
+                    size="2"
                   />
                 </td>
                 <td style={{ padding: "0.75rem", borderBottom: "1px solid var(--rd-border)" }}>
@@ -434,6 +460,118 @@ export function WorkerOverviewTable({
           </tbody>
         </table>
       </div>
+
+      <Box className="mobile-radix-table-shell">
+        <ScrollArea type="auto" scrollbars="horizontal" className="mobile-radix-table-scroll">
+          <Table.Root
+            variant="surface"
+            size="1"
+            layout="fixed"
+            className="mobile-radix-overview-table"
+          >
+            <Table.Header>
+              <Table.Row>
+                <Table.ColumnHeaderCell width="48px">
+                  <Checkbox
+                    checked={
+                      displayWorkers.length > 0 && selectedIds.length === displayWorkers.length
+                        ? true
+                        : selectedIds.length > 0
+                          ? "indeterminate"
+                          : false
+                    }
+                    onCheckedChange={(checked) => {
+                      setSelectionMessage("");
+                      setSelectedIds(checked === true ? displayWorkers.map((worker) => worker.worker_id) : []);
+                    }}
+                    aria-label="Select all workers"
+                    color="blue"
+                    variant="soft"
+                    size="2"
+                  />
+                </Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell width="130px">Name</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell width="170px">Grouping</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell width="125px">Location</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell width="118px">Available</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell width="130px">Site Score</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell width="120px">Completed Jobs</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell width="115px">Actions</Table.ColumnHeaderCell>
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
+              {displayWorkers.map((worker) => {
+                const displayName = isJobProvider
+                  ? getProviderFacingDisplayName(worker)
+                  : worker.full_name;
+                const grouping = getWorkerDisplayGrouping(worker);
+                return (
+                  <Table.Row key={worker.worker_id}>
+                    <Table.Cell>
+                      <Checkbox
+                        checked={selectedIds.includes(worker.worker_id)}
+                        onCheckedChange={() => toggleSelection(worker.worker_id)}
+                        aria-label={`Select ${worker.full_name}`}
+                        color="blue"
+                        variant="soft"
+                        size="2"
+                      />
+                    </Table.Cell>
+                    <Table.RowHeaderCell>
+                      <button
+                        type="button"
+                        onClick={() => setActiveWorker(worker)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          padding: 0,
+                          color: "var(--rd-text)",
+                          textDecoration: "underline",
+                          cursor: "pointer",
+                          font: "inherit",
+                        }}
+                      >
+                        {displayName}
+                      </button>
+                    </Table.RowHeaderCell>
+                    <Table.Cell>
+                      <div style={{ display: "grid", gap: "0.15rem" }}>
+                        <strong style={{ color: "var(--rd-text)" }}>{grouping.typeLabel}</strong>
+                        <span style={{ color: "var(--rd-text-muted)" }}>
+                          {grouping.detailLabel}: {grouping.detailValue}
+                        </span>
+                      </div>
+                    </Table.Cell>
+                    <Table.Cell>
+                      {isJobProvider
+                        ? getProviderFacingLocationLabel(worker)
+                        : worker.location_display ?? `${worker.town ?? "-"} / ${worker.postcode}`}
+                    </Table.Cell>
+                    <Table.Cell>{worker.available_today ? "Yes" : "Project committed"}</Table.Cell>
+                    <Table.Cell>
+                      {worker.stathub.status === "insufficient"
+                        ? getSiteScoreStatusLabel(worker.stathub.status)
+                        : `${worker.stathub.overallScore}/100`}
+                    </Table.Cell>
+                    <Table.Cell>{worker.completed_jobs_count}</Table.Cell>
+                    <Table.Cell>
+                      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                        <SaveWorkerButton worker={worker} />
+                        {canMutateWorkers ? <Link href={`/workers/${worker.worker_id}/edit`}>Edit</Link> : null}
+                        {canMutateWorkers ? (
+                          <button type="button" onClick={() => handleDelete(worker.worker_id, worker.full_name)}>
+                            Delete
+                          </button>
+                        ) : null}
+                      </div>
+                    </Table.Cell>
+                  </Table.Row>
+                );
+              })}
+            </Table.Body>
+          </Table.Root>
+        </ScrollArea>
+      </Box>
 
       <WorkerProfileModal
         open={Boolean(activeWorker)}

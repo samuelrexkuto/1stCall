@@ -1,8 +1,7 @@
-import { SiteScoreExplanationAccordion } from "@/components/workers/SiteScoreExplanationAccordion";
 import type { WorkerOverviewRow, WorkerStatHubData } from "@/lib/workers/types";
 
 function formatReleaseDate(value: string | null) {
-  if (!value) return "TBC";
+  if (!value) return "Not scheduled yet";
   return new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
     month: "long",
@@ -28,21 +27,6 @@ function getStatusStyle(status: WorkerStatHubData["status"]) {
 
 export function SiteScoreCard({ worker }: { worker: WorkerOverviewRow }) {
   const stathub = worker.stathub;
-  const meta = worker.statHubMeta;
-  const visibleScore = stathub.overallScore ?? stathub.internalScoreSnapshot ?? 0;
-  const statusBody =
-    stathub.status === "insufficient"
-      ? [
-          "A credible public Site Score begins after 3 verified completed platform jobs with valid review data.",
-          "Until then, score confidence is still building through direct review activity and portfolio-backed proof.",
-        ]
-      : stathub.status === "provisional"
-        ? [
-            "This score is based on early verified platform activity and becomes more reliable as more completed jobs, review evidence, and portfolio-backed proof are added.",
-          ]
-        : [
-            "This Site Score is based on a stronger body of verified completed platform jobs and monthly validated review evidence.",
-          ];
 
   return (
     <section
@@ -76,91 +60,17 @@ export function SiteScoreCard({ worker }: { worker: WorkerOverviewRow }) {
         </span>
       </div>
 
-      {stathub.status === "insufficient" ? (
-        <div style={{ display: "grid", gap: "0.45rem", color: "var(--rd-text-muted)" }}>
-          {statusBody.map((line) => (
-            <p key={line} style={{ margin: 0 }}>
-              {line}
-            </p>
-          ))}
-          <p style={{ margin: 0 }}>
-            <strong>Verified completed jobs on record:</strong> {meta.verifiedCompletedJobsCount}
-          </p>
-          <p style={{ margin: 0 }}>
-            <strong>Reviewed jobs contributing to score:</strong> {meta.reviewedJobsCount}
-          </p>
-          <p style={{ margin: 0 }}>
-            <strong>Portfolio-backed jobs:</strong> {meta.portfolioBackedJobsCount ?? 0}
-          </p>
-          <p style={{ margin: 0 }}>
-            <strong>Repeat-booked count:</strong> {meta.repeatBookedCount ?? 0}
-          </p>
-          <p style={{ margin: 0 }}>
-            <strong>Next score release:</strong> {formatReleaseDate(stathub.nextReleaseAt)}
-          </p>
-        </div>
-      ) : (
-        <>
-          {statusBody.map((line) => (
-            <p key={line} style={{ margin: 0, color: "var(--rd-text-muted)" }}>
-              {line}
-            </p>
-          ))}
-          <div
-            style={{
-              display: "grid",
-              gap: "0.75rem",
-              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-            }}
-          >
-            <div>
-              <div style={{ color: "var(--rd-text-muted)", fontSize: "0.82rem" }}>Overall Employment Score</div>
-              <strong style={{ fontSize: "1.25rem" }}>{visibleScore}/100</strong>
-            </div>
-            <div>
-              <div style={{ color: "var(--rd-text-muted)", fontSize: "0.82rem" }}>Reliability</div>
-              <strong>{stathub.reliabilityScore}</strong>
-            </div>
-            <div>
-              <div style={{ color: "var(--rd-text-muted)", fontSize: "0.82rem" }}>Site Conduct</div>
-              <strong>{stathub.siteConductScore}</strong>
-            </div>
-            <div>
-              <div style={{ color: "var(--rd-text-muted)", fontSize: "0.82rem" }}>Work Quality</div>
-              <strong>{stathub.workQualityScore}</strong>
-            </div>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gap: "0.55rem",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            }}
-          >
-            <div>
-              <div style={{ color: "var(--rd-text-muted)", fontSize: "0.82rem" }}>Verified completed jobs</div>
-              <strong>{meta.verifiedCompletedJobsCount}</strong>
-            </div>
-            <div>
-              <div style={{ color: "var(--rd-text-muted)", fontSize: "0.82rem" }}>Reviewed jobs contributing</div>
-              <strong>{meta.reviewedJobsCount}</strong>
-            </div>
-            <div>
-              <div style={{ color: "var(--rd-text-muted)", fontSize: "0.82rem" }}>Portfolio-backed jobs</div>
-              <strong>{meta.portfolioBackedJobsCount ?? 0}</strong>
-            </div>
-            <div>
-              <div style={{ color: "var(--rd-text-muted)", fontSize: "0.82rem" }}>Repeat-booked by clients</div>
-              <strong>{meta.repeatBookedCount ?? 0}</strong>
-            </div>
-          </div>
-          <p style={{ margin: 0, color: "var(--rd-text-muted)" }}>
-            <strong>Next score release:</strong> {formatReleaseDate(stathub.nextReleaseAt)}
-          </p>
-        </>
-      )}
-
-      <SiteScoreExplanationAccordion />
+      <p style={{ margin: 0, color: "var(--rd-text-muted)" }}>
+        <strong>Next score release date:</strong> {formatReleaseDate(stathub.nextReleaseAt)}
+      </p>
+      <div style={{ display: "grid", gap: "0.45rem", color: "var(--rd-text-muted)" }}>
+        <p style={{ margin: 0 }}>
+          A credible public Site Score begins after 3 verified completed platform jobs with valid review data.
+        </p>
+        <p style={{ margin: 0 }}>
+          Until then, score confidence is still building through direct review activity and portfolio-backed proof.
+        </p>
+      </div>
     </section>
   );
 }

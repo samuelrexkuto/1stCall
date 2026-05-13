@@ -1,5 +1,7 @@
+import "@radix-ui/themes/styles.css";
 import "./globals.css";
 import type { ReactNode } from "react";
+import { Theme } from "@radix-ui/themes";
 import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
 import { AppShell } from "@/components/layout/AppShell";
 import { getCurrentAdminUser } from "@/lib/admin-auth";
@@ -84,9 +86,17 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           margin: 0,
         }}
       >
-        <AuthSessionProvider initialUser={initialUser}>
-          <AppShell>{children}</AppShell>
-        </AuthSessionProvider>
+        <Theme
+          appearance="inherit"
+          accentColor="violet"
+          grayColor="slate"
+          radius="large"
+          scaling="95%"
+        >
+          <AuthSessionProvider initialUser={initialUser}>
+            <AppShell>{children}</AppShell>
+          </AuthSessionProvider>
+        </Theme>
       </body>
     </html>
   );

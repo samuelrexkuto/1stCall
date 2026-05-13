@@ -78,6 +78,8 @@ export interface ProviderOverviewRow {
     reason: string | null;
     created_at: string;
   }>;
+  profile_image_url?: string | null;
+  profile_image_path?: string | null;
 }
 
 export function ProviderOverviewTable({
@@ -172,30 +174,21 @@ export function ProviderOverviewTable({
 
   return (
     <>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "1rem",
-          flexWrap: "wrap",
-          marginBottom: "1rem",
-        }}
-      >
-        <p style={{ margin: 0 }}>Selected subscriber accounts: {selectedIds.length}</p>
-        <button type="button" disabled={selectedIds.length === 0} onClick={() => setBroadcastModalOpen(true)}>
+      <div className="rd-bulk-action-row">
+        <strong>Selected subscriber accounts: {selectedIds.length}</strong>
+        <button
+          className="rd-button rd-button--primary"
+          type="button"
+          disabled={selectedIds.length === 0}
+          aria-disabled={selectedIds.length === 0}
+          onClick={() => setBroadcastModalOpen(true)}
+        >
           Broadcast / Dispatch
         </button>
       </div>
 
-      <div style={{ overflowX: "auto" }}>
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            background: "var(--rd-bg-elevated)",
-          }}
-        >
+      <div className="rd-table-shell">
+        <table className="rd-admin-table" style={{ background: "var(--rd-bg-elevated)" }}>
           <thead>
             <tr>
               <TableHeader>

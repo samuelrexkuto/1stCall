@@ -10,16 +10,34 @@ async function updateProviderAccountRecord(
     name: string;
     email: string | null;
     avatarUrl?: string | null;
+    profileImageUrl?: string | null;
+    profileImagePath?: string | null;
+    avatar_url?: string | null;
+    avatar_path?: string | null;
+    profile_image_url?: string | null;
+    profile_image_path?: string | null;
     phone: string | null;
     town: string | null;
     postcode: string | null;
   },
 ) {
   const supabase = createAdminSupabaseClient();
+  const nextProfileImageUrl =
+    values.profileImageUrl ?? values.profile_image_url ?? values.avatarUrl ?? values.avatar_url ?? null;
+  const nextProfileImagePath =
+    values.profileImagePath ?? values.profile_image_path ?? values.avatar_path ?? null;
+  // Keep both profile_image_* and avatar_* fields in sync.
+  // avatar_* is retained for backward compatibility with existing app code.
+  const providerImagePatch = {
+    profile_image_url: nextProfileImageUrl,
+    profile_image_path: nextProfileImagePath,
+    avatar_url: nextProfileImageUrl,
+    avatar_path: nextProfileImagePath,
+  };
   const payload = {
     name: values.name,
     email: values.email,
-    avatar_url: values.avatarUrl ?? null,
+    ...providerImagePatch,
     phone: values.phone,
     town: values.town,
     postcode: values.postcode,
@@ -29,7 +47,7 @@ async function updateProviderAccountRecord(
     .from("job_providers")
     .update(payload)
     .eq("id", providerId)
-    .select("id, name, email, phone, town, postcode")
+    .select("id, name, email, phone, town, postcode, profile_image_url, profile_image_path, avatar_url, avatar_path")
     .maybeSingle();
 
   if (!primary.error && primary.data) {
@@ -40,7 +58,7 @@ async function updateProviderAccountRecord(
     .from("job_providers")
     .update(payload)
     .eq("provider_id", providerId)
-    .select("id, name, email, phone, town, postcode")
+    .select("id, name, email, phone, town, postcode, profile_image_url, profile_image_path, avatar_url, avatar_path")
     .maybeSingle();
 }
 
@@ -96,7 +114,7 @@ export async function GET() {
         manualDraftsUsed: provider.manualDraftsUsed,
   };
 
-  const response = NextResponse.json({ success: true, provider, user: nextUser });
+  const response = NextResponse.json({ success: true, account: provider, provider, user: nextUser });
   response.cookies.set(APP_SESSION_COOKIE, serializeAppSession(nextUser), {
     httpOnly: true,
     sameSite: "lax",
@@ -120,7 +138,25 @@ export async function PATCH(request: Request) {
     phone: typeof body?.phone === "string" ? body.phone.trim() : "",
     town: typeof body?.town === "string" ? body.town.trim() : "",
     postcode: typeof body?.postcode === "string" ? body.postcode.trim() : "",
-    avatarUrl: typeof body?.avatarUrl === "string" ? body.avatarUrl.trim() : null,
+    avatarUrl:
+      typeof body?.avatarUrl === "string"
+        ? body.avatarUrl.trim()
+        : typeof body?.avatar_url === "string"
+          ? body.avatar_url.trim()
+          : null,
+    avatarPath: typeof body?.avatar_path === "string" ? body.avatar_path.trim() : null,
+    profileImageUrl:
+      typeof body?.profileImageUrl === "string"
+        ? body.profileImageUrl.trim()
+        : typeof body?.profile_image_url === "string"
+          ? body.profile_image_url.trim()
+          : null,
+    profileImagePath:
+      typeof body?.profileImagePath === "string"
+        ? body.profileImagePath.trim()
+        : typeof body?.profile_image_path === "string"
+          ? body.profile_image_path.trim()
+          : null,
   };
 
   if (!payload.name) {
@@ -130,7 +166,12 @@ export async function PATCH(request: Request) {
   const primary = await updateProviderAccountRecord(currentUser.providerId, {
     name: payload.name,
     email: payload.email || null,
-    avatarUrl: payload.avatarUrl || null,
+    avatarUrl: payload.avatarUrl || payload.profileImageUrl || null,
+    profileImageUrl: payload.profileImageUrl || payload.avatarUrl || null,
+    profileImagePath: payload.profileImagePath || payload.avatarPath || null,
+    avatar_path: payload.avatarPath || payload.profileImagePath || null,
+    profile_image_url: payload.profileImageUrl || payload.avatarUrl || null,
+    profile_image_path: payload.profileImagePath || payload.avatarPath || null,
     phone: payload.phone || null,
     town: payload.town || null,
     postcode: payload.postcode || null,
@@ -147,11 +188,43 @@ export async function PATCH(request: Request) {
   await supabase
     .from("project_management_accounts")
     .update({
-      name: currentUser.name ?? payload.name,
+      name: payload.name,
       email: payload.email || currentUser.email,
-      avatar_url: payload.avatarUrl || null,
+      profile_image_url: payload.profileImageUrl || payload.avatarUrl || null,
+      profile_image_path: payload.profileImagePath || payload.avatarPath || null,
     })
     .eq("provider_id", currentUser.providerId);
+
+  if (payload.email || currentUser.email) {
+    await supabase
+      .from("project_management_accounts")
+      .update({
+        name: payload.name,
+        email: payload.email || currentUser.email,
+        profile_image_url: payload.profileImageUrl || payload.avatarUrl || null,
+        profile_image_path: payload.profileImagePath || payload.avatarPath || null,
+      })
+      .eq("email", payload.email || currentUser.email);
+  }
+
+  const nextProfileImageUrl = payload.profileImageUrl || payload.avatarUrl || null;
+  const nextProfileImagePath = payload.profileImagePath || payload.avatarPath || null;
+
+  if (nextProfileImageUrl || nextProfileImagePath) {
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({
+        avatar_url: nextProfileImageUrl,
+        avatar_path: nextProfileImagePath,
+      })
+      .eq("id", currentUser.id);
+
+    if (profileError) {
+      console.error("[api/account PATCH] profiles avatar sync failed", {
+        message: profileError.message,
+      });
+    }
+  }
 
   const updatedProvider = await loadProviderAccount(currentUser.providerId);
   if (!updatedProvider) {
@@ -200,7 +273,26 @@ export async function PATCH(request: Request) {
     manualDraftsUsed: updatedProvider.manualDraftsUsed,
   };
 
-  const response = NextResponse.json({ success: true, provider: updatedProvider, user: nextUser });
+  console.log("[api/account PATCH] returning account image fields", {
+    id: updatedProvider?.id,
+    profile_image_url: updatedProvider?.profile_image_url,
+    profile_image_path: updatedProvider?.profile_image_path,
+    avatar_url: nextProfileImageUrl,
+    avatar_path: nextProfileImagePath,
+  });
+
+  const response = NextResponse.json({
+    success: true,
+    account: {
+      ...updatedProvider,
+      profile_image_url: updatedProvider.profile_image_url ?? nextProfileImageUrl,
+      profile_image_path: updatedProvider.profile_image_path ?? nextProfileImagePath,
+      avatar_url: nextProfileImageUrl,
+      avatar_path: nextProfileImagePath,
+    },
+    provider: updatedProvider,
+    user: nextUser,
+  });
   response.cookies.set(APP_SESSION_COOKIE, serializeAppSession(nextUser), {
     httpOnly: true,
     sameSite: "lax",

@@ -91,44 +91,54 @@ export function ProvidersPageClient({
   }
 
   return (
-    <main>
-      <p style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-        <Link href="/">Back to home</Link>
-        <Link href="/providers/new">Create subscriber</Link>
-        <Link href="/jobs">View jobs</Link>
-      </p>
+    <div>
+      <div className="rd-page-header">
+        <div className="rd-page-heading-row">
+          <div>
+            <h1 className="rd-page-title">Project Management Overview</h1>
+            <p className="rd-page-subtitle">
+              Total subscriber accounts: {summary.total} | Free: {summary.free} | PAYG: {summary.payg} | Monthly: {summary.monthly}
+            </p>
+            <p className="rd-page-subtitle">
+              This view tracks consultant, contractor, and subscriber accounts that manage projects and use the platform to source labour or subcontractors.
+            </p>
+          </div>
 
-      <h1 style={{ marginBottom: "0.5rem" }}>Project Management Overview</h1>
-      <p style={{ marginTop: 0 }}>
-        Total subscriber accounts: {summary.total} | Free: {summary.free} | PAYG: {summary.payg} | Monthly: {summary.monthly}
-      </p>
-      <p style={{ marginTop: 0, color: "var(--rd-text-muted)" }}>
-        This view tracks consultant, contractor, and subscriber accounts that manage projects and use the platform to source labour or subcontractors.
-      </p>
+          <div className="rd-page-actions">
+            <Link className="rd-button rd-button--secondary" href="/providers/new">
+              Create subscriber
+            </Link>
 
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-          gap: "0.75rem",
-          alignItems: "end",
-          padding: "0.95rem",
-          borderRadius: 10,
-          border: "1px solid var(--rd-border)",
-          background: "var(--rd-bg-elevated)",
-          margin: "1rem 0",
-        }}
-      >
-        <label>
-          Name
+            <Link className="rd-button rd-button--secondary" href="/jobs">
+              View jobs
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      <section className="rd-card rd-admin-filter-card">
+        <form
+          className="rd-form-stack"
+          onSubmit={(event) => {
+            event.preventDefault();
+            applyFilters();
+          }}
+        >
+          <div className="rd-admin-filter-grid">
+            <label className="rd-field">
+              <span className="rd-field-label">Name</span>
           <input
+            className="rd-control"
+            name="name"
             value={filters.name}
             onChange={(event) => setFilters((current) => ({ ...current, name: event.target.value }))}
           />
-        </label>
-        <label>
-          Account type / grouping
+            </label>
+            <label className="rd-field">
+              <span className="rd-field-label">Account type / grouping</span>
           <select
+            className="rd-control"
+            name="accountType"
             value={filters.accountType}
             onChange={(event) => setFilters((current) => ({ ...current, accountType: event.target.value }))}
           >
@@ -138,10 +148,12 @@ export function ProvidersPageClient({
             <option value="client">Client</option>
             <option value="contractor">Contractor</option>
           </select>
-        </label>
-        <label>
-          Tier
+            </label>
+            <label className="rd-field">
+              <span className="rd-field-label">Tier</span>
           <select
+            className="rd-control"
+            name="tier"
             value={filters.tier}
             onChange={(event) => setFilters((current) => ({ ...current, tier: event.target.value }))}
           >
@@ -152,10 +164,12 @@ export function ProvidersPageClient({
             <option value="trial_full_access">30-Day Trial — Full Access</option>
             <option value="manual_full_access">Manual Full Access</option>
           </select>
-        </label>
-        <label>
-          Billing status
+            </label>
+            <label className="rd-field">
+              <span className="rd-field-label">Billing status</span>
           <select
+            className="rd-control"
+            name="billingStatus"
             value={filters.billingStatus}
             onChange={(event) => setFilters((current) => ({ ...current, billingStatus: event.target.value }))}
           >
@@ -166,17 +180,21 @@ export function ProvidersPageClient({
             <option value="past_due">Past due</option>
             <option value="expired">Expired</option>
           </select>
-        </label>
-        <label>
-          Location / town
+            </label>
+            <label className="rd-field">
+              <span className="rd-field-label">Location / town</span>
           <input
+            className="rd-control"
+            name="location"
             value={filters.location}
             onChange={(event) => setFilters((current) => ({ ...current, location: event.target.value }))}
           />
-        </label>
-        <label>
-          Trial status
+            </label>
+            <label className="rd-field">
+              <span className="rd-field-label">Trial status</span>
           <select
+            className="rd-control"
+            name="trialStatus"
             value={filters.trialStatus}
             onChange={(event) => setFilters((current) => ({ ...current, trialStatus: event.target.value }))}
           >
@@ -186,15 +204,18 @@ export function ProvidersPageClient({
             <option value="expired">Expired</option>
             <option value="revoked">Revoked</option>
           </select>
-        </label>
-        <div style={{ display: "flex", gap: "0.65rem", flexWrap: "wrap" }}>
-          <button type="button" onClick={applyFilters}>
-            Apply filters
-          </button>
-          <button type="button" onClick={resetFilters}>
-            Reset
-          </button>
-        </div>
+            </label>
+          </div>
+
+          <div className="rd-actions-row">
+            <button className="rd-button rd-button--primary" type="submit">
+              Apply filters
+            </button>
+            <button className="rd-button rd-button--secondary" type="button" onClick={resetFilters}>
+              Reset
+            </button>
+          </div>
+        </form>
       </section>
 
       {errorMessage ? <p>{errorMessage}</p> : null}
@@ -217,7 +238,7 @@ export function ProvidersPageClient({
           }
         />
       ) : null}
-    </main>
+    </div>
   );
 }
 

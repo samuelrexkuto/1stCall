@@ -218,8 +218,22 @@
 }
 
 @media (max-width: 760px) {
+  .assistantResults {
+    overflow: visible;
+  }
+
   .recommendedSection {
-    gap: 0.72rem;
+    gap: 1rem;
+    overflow: visible;
+  }
+
+  .recommendedTitle {
+    margin: 0;
+    padding: 0;
+    transform: none;
+    clip-path: none;
+    font-size: 1.02rem;
+    line-height: 1.22;
   }
 
   .matchList {
@@ -227,19 +241,18 @@
   }
 
   .mobileMatchCarousel {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    overflow: visible;
   }
 
   .mobileMatchRow {
-    display: flex;
-    gap: 12px;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    -webkit-overflow-scrolling: touch;
-    padding: 0 2px 4px;
-    scrollbar-width: none;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    overflow: visible;
+    padding: 0;
   }
 
   .mobileMatchRow::-webkit-scrollbar {
@@ -247,8 +260,9 @@
   }
 
   .mobileMatchCard {
-    flex: 0 0 calc(50% - 6px);
-    min-width: calc(50% - 6px);
+    width: 100%;
+    max-width: none;
+    min-width: 0;
     scroll-snap-align: start;
     display: grid;
     overflow: hidden;
@@ -329,7 +343,7 @@
   :global(.workforce-dispatch-ai-page) .recommendedSection {
     width: 100%;
     max-width: 100%;
-    overflow-x: hidden;
+    overflow: visible;
     box-sizing: border-box;
   }
 
@@ -340,23 +354,23 @@
   }
 
   :global(.workforce-dispatch-ai-page) .mobileMatchCarousel {
-    overflow-x: hidden;
+    overflow: visible;
   }
 
   :global(.workforce-dispatch-ai-page) .mobileMatchCard {
     max-width: none;
-    overflow: visible;
-    border-radius: 0;
-    border: none;
-    background: transparent;
+    overflow: hidden;
+    border-radius: 18px;
+    border: 1px solid var(--rd-border);
+    background: var(--rd-bg-elevated);
   }
 
   :global(.workforce-dispatch-ai-page) .mobileMatchImage {
-    border-radius: 20px;
+    border-radius: 0;
   }
 
   :global(.workforce-dispatch-ai-page) .mobileMatchBody {
-    padding: 10px 2px 0;
+    padding: 0.68rem;
     background: transparent;
   }
 }

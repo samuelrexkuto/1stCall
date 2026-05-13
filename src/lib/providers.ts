@@ -23,7 +23,7 @@ export async function loadProvidersOverview(): Promise<ProvidersOverviewPayload>
   const primary = await supabase
     .from("job_providers")
     .select(
-      "id, name, email, phone, town, postcode, created_at, account_tier, billing_status, payg_pack_type, payg_dispatch_allowance_total, payg_dispatch_allowance_remaining, payg_pack, payg_allowance_total, payg_allowance_remaining, usage_today, monthly_renewal_date, monthly_active, trial_access, is_trial_month, trial_granted_by_admin, trial_start_date, trial_end_date, trial_status, trial_access_level, internal_billing_note, success_fee_status, payment_reliability_status, invoices_issued_count, invoices_paid_on_time_count, invoices_paid_late_count, unpaid_invoices_count, part_paid_invoices_count, average_days_to_pay, longest_payment_delay_days, current_overdue_count, payment_disputes_count, contractor_payout_delay_incidents_count, last_payment_received_date, payment_reliability_note, payment_reliability_last_reviewed_at",
+      "id, name, email, phone, town, postcode, avatar_url, avatar_path, profile_image_url, profile_image_path, created_at, account_tier, billing_status, payg_pack_type, payg_dispatch_allowance_total, payg_dispatch_allowance_remaining, payg_pack, payg_allowance_total, payg_allowance_remaining, usage_today, monthly_renewal_date, monthly_active, trial_access, is_trial_month, trial_granted_by_admin, trial_start_date, trial_end_date, trial_status, trial_access_level, internal_billing_note, success_fee_status, payment_reliability_status, invoices_issued_count, invoices_paid_on_time_count, invoices_paid_late_count, unpaid_invoices_count, part_paid_invoices_count, average_days_to_pay, longest_payment_delay_days, current_overdue_count, payment_disputes_count, contractor_payout_delay_incidents_count, last_payment_received_date, payment_reliability_note, payment_reliability_last_reviewed_at",
     )
     .order("created_at", { ascending: false });
 
@@ -35,7 +35,7 @@ export async function loadProvidersOverview(): Promise<ProvidersOverviewPayload>
     const billingFallback = await supabase
       .from("job_providers")
       .select(
-        "id, name, email, phone, town, postcode, created_at, account_tier, billing_status, payg_pack_type, payg_dispatch_allowance_total, payg_dispatch_allowance_remaining, usage_today, monthly_renewal_date, monthly_active, success_fee_status",
+        "id, name, email, phone, town, postcode, avatar_url, profile_image_url, created_at, account_tier, billing_status, payg_pack_type, payg_dispatch_allowance_total, payg_dispatch_allowance_remaining, usage_today, monthly_renewal_date, monthly_active, success_fee_status",
       )
       .order("created_at", { ascending: false });
     data = (billingFallback.data as Array<Record<string, unknown>> | null) ?? null;
@@ -58,7 +58,7 @@ export async function loadProvidersOverview(): Promise<ProvidersOverviewPayload>
 
   const projectAccountsResult = await supabase
     .from("project_management_accounts")
-    .select("id, provider_id, name, email, account_tier, access_tier, access_status, admin_full_access, trial_access, trial_status, trial_access_level, trial_start_date, trial_end_date, trial_granted_by, trial_granted_at, trial_notes, dispatch_allowance_remaining, dispatch_access_source");
+    .select("id, provider_id, name, email, profile_image_url, profile_image_path, account_tier, access_tier, access_status, admin_full_access, trial_access, trial_status, trial_access_level, trial_start_date, trial_end_date, trial_granted_by, trial_granted_at, trial_notes, dispatch_allowance_remaining, dispatch_access_source");
   const projectAccounts = !projectAccountsResult.error && Array.isArray(projectAccountsResult.data)
     ? (projectAccountsResult.data as Array<Record<string, unknown>>)
     : [];
@@ -136,6 +136,22 @@ export async function loadProvidersOverview(): Promise<ProvidersOverviewPayload>
       name: typeof accessRow.name === "string" ? accessRow.name : typeof provider.name === "string" ? provider.name : "Unnamed provider",
       company_name: typeof accessRow.name === "string" ? accessRow.name : typeof provider.name === "string" ? provider.name : "Unnamed provider",
       email: typeof accessRow.email === "string" ? accessRow.email : typeof provider.email === "string" ? provider.email : null,
+      profile_image_url:
+        typeof accessRow.profile_image_url === "string"
+          ? accessRow.profile_image_url
+          : typeof provider.profile_image_url === "string"
+            ? provider.profile_image_url
+            : typeof provider.avatar_url === "string"
+              ? provider.avatar_url
+            : null,
+      profile_image_path:
+        typeof accessRow.profile_image_path === "string"
+          ? accessRow.profile_image_path
+          : typeof provider.profile_image_path === "string"
+            ? provider.profile_image_path
+            : typeof provider.avatar_path === "string"
+              ? provider.avatar_path
+            : null,
       phone: typeof provider.phone === "string" ? provider.phone : null,
       town: typeof provider.town === "string" ? provider.town : null,
       postcode: typeof provider.postcode === "string" ? provider.postcode : null,

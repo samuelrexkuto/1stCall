@@ -3,6 +3,9 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import * as Collapsible from "@radix-ui/react-collapsible";
+import { ChevronDownIcon, MixerHorizontalIcon } from "@radix-ui/react-icons";
+import { Button } from "@radix-ui/themes";
 import { STANDARD_ROLES } from "@/lib/constants/roles";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { JobOverviewTable, type JobOverviewRow } from "@/components/jobs/JobOverviewTable";
@@ -59,6 +62,12 @@ export function JobsPageClient({ initialFilters, initialData }: JobsPageClientPr
   const [capabilities, setCapabilities] = useState(initialData.capabilities);
   const [errorMessage, setErrorMessage] = useState(initialData.errorMessage);
   const [warningMessage, setWarningMessage] = useState(initialData.warningMessage);
+  const hasActiveFilters = useMemo(
+    () => Object.values(initialFilters).some((value) => Boolean(value)),
+    [initialFilters],
+  );
+  const [filtersOpen, setFiltersOpen] = useState(hasActiveFilters);
+  const [isMobileFiltersViewport, setIsMobileFiltersViewport] = useState(false);
 
   useEffect(() => {
     setFilters(initialFilters);
@@ -68,6 +77,19 @@ export function JobsPageClient({ initialFilters, initialData }: JobsPageClientPr
     setErrorMessage(initialData.errorMessage);
     setWarningMessage(initialData.warningMessage);
   }, [initialFilters, initialData]);
+
+  useEffect(() => {
+    setFiltersOpen(hasActiveFilters);
+  }, [hasActiveFilters]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 768px)");
+    const updateViewport = () => setIsMobileFiltersViewport(mediaQuery.matches);
+
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+    return () => mediaQuery.removeEventListener("change", updateViewport);
+  }, []);
 
   function updateFilter<K extends keyof JobsPageClientProps["initialFilters"]>(
     key: K,
@@ -160,8 +182,8 @@ export function JobsPageClient({ initialFilters, initialData }: JobsPageClientPr
 
   return (
     <main>
-      <h1 style={{ marginBottom: "0.5rem" }}>Jobs Overview</h1>
-      <p style={{ marginTop: 0 }}>
+      <h1 className="overview-page-title" style={{ marginBottom: "0.5rem" }}>Jobs Overview</h1>
+      <p className="overview-page-summary" style={{ marginTop: 0 }}>
         {isJobProvider ? "Your jobs only" : "All jobs"}: {summary.total} | Open: {summary.open} | Broadcast ready: {summary.broadcastReady} |
         Awaiting response: {summary.awaitingResponse} | Completed: {summary.completed}
       </p>
@@ -202,113 +224,139 @@ export function JobsPageClient({ initialFilters, initialData }: JobsPageClientPr
         </div>
       ) : null}
 
-      <form
-        className="overview-filter-form"
-        onSubmit={handleApplyFilters}
-        style={{
-          marginBottom: "1rem",
-        }}
+      <Collapsible.Root
+        open={isMobileFiltersViewport ? filtersOpen : true}
+        onOpenChange={setFiltersOpen}
+        className="overview-filter-collapsible"
       >
-        <label className="overview-filter-field">
-          Job title
-          <input
-            value={filters.title}
-            onChange={(event) => updateFilter("title", event.target.value)}
-          />
-        </label>
-        <label className="overview-filter-field">
-          Required role
-          <select
-            value={filters.role}
-            onChange={(event) => updateFilter("role", event.target.value)}
+        <Collapsible.Trigger asChild>
+          <Button
+            type="button"
+            variant="surface"
+            color="gray"
+            radius="full"
+            size="2"
+            className="overview-filter-toggle"
+            aria-label={filtersOpen ? "Collapse Jobs Overview filters" : "Expand Jobs Overview filters"}
           >
-            <option value="">All</option>
-            {STANDARD_ROLES.map((roleOption) => (
-              <option key={roleOption} value={roleOption}>
-                {roleOption}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="overview-filter-field">
-          Area
-          <input
-            value={filters.area}
-            onChange={(event) => updateFilter("area", event.target.value)}
-          />
-        </label>
-        <label className="overview-filter-field">
-          Postcode
-          <input
-            value={filters.postcode}
-            onChange={(event) => updateFilter("postcode", event.target.value)}
-          />
-        </label>
-        {!isJobProvider ? (
-          <label className="overview-filter-field">
-            Provider
-            <select
-              value={filters.provider}
-              onChange={(event) => updateFilter("provider", event.target.value)}
-            >
-              <option value="">All</option>
-              {providers.map((provider) => (
-                <option key={provider.provider_id} value={provider.company_name}>
-                  {provider.company_name}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        <label className="overview-filter-field">
-          Job status
-          <select
-            value={filters.job_status}
-            onChange={(event) => updateFilter("job_status", event.target.value)}
+            <MixerHorizontalIcon aria-hidden="true" />
+            Filters
+            <ChevronDownIcon
+              aria-hidden="true"
+              className={filtersOpen ? "overview-filter-toggle-chevron is-open" : "overview-filter-toggle-chevron"}
+            />
+          </Button>
+        </Collapsible.Trigger>
+        <Collapsible.Content forceMount className="overview-filter-content">
+          <form
+            className="overview-filter-form"
+            onSubmit={handleApplyFilters}
+            style={{
+              marginBottom: "1rem",
+            }}
           >
-            <option value="">All</option>
-            <option value="open">open</option>
-            <option value="partially_filled">partially_filled</option>
-            <option value="filled">filled</option>
-            <option value="in_progress">in_progress</option>
-            <option value="completed">completed</option>
-            <option value="cancelled">cancelled</option>
-          </select>
-        </label>
-        <label className="overview-filter-field">
-          Payment status
-          <select
-            value={filters.payment_status}
-            onChange={(event) => updateFilter("payment_status", event.target.value)}
-          >
-            <option value="">All</option>
-            <option value="pending">pending</option>
-            <option value="part_paid">part_paid</option>
-            <option value="paid">paid</option>
-            <option value="overdue">overdue</option>
-            <option value="written_off">written_off</option>
-          </select>
-        </label>
-        <label className="overview-filter-field">
-          Broadcast status
-          <select
-            value={filters.broadcast_status}
-            onChange={(event) => updateFilter("broadcast_status", event.target.value)}
-          >
-            <option value="">All</option>
-            <option value="broadcast ready">broadcast ready</option>
-            <option value="awaiting response">awaiting response</option>
-            <option value="completed">completed</option>
-          </select>
-        </label>
-        <input type="hidden" name="status" value={filters.status} />
-        <div className="overview-filter-actions">
-          <button type="submit">Apply filters</button>
-          <button type="button" onClick={handleReset}>
-            Reset
-          </button>
-        </div>
-      </form>
+            <label className="overview-filter-field">
+              Job title
+              <input
+                value={filters.title}
+                onChange={(event) => updateFilter("title", event.target.value)}
+              />
+            </label>
+            <label className="overview-filter-field">
+              Required role
+              <select
+                value={filters.role}
+                onChange={(event) => updateFilter("role", event.target.value)}
+              >
+                <option value="">All</option>
+                {STANDARD_ROLES.map((roleOption) => (
+                  <option key={roleOption} value={roleOption}>
+                    {roleOption}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="overview-filter-field">
+              Area
+              <input
+                value={filters.area}
+                onChange={(event) => updateFilter("area", event.target.value)}
+              />
+            </label>
+            <label className="overview-filter-field">
+              Postcode
+              <input
+                value={filters.postcode}
+                onChange={(event) => updateFilter("postcode", event.target.value)}
+              />
+            </label>
+            {!isJobProvider ? (
+              <label className="overview-filter-field">
+                Provider
+                <select
+                  value={filters.provider}
+                  onChange={(event) => updateFilter("provider", event.target.value)}
+                >
+                  <option value="">All</option>
+                  {providers.map((provider) => (
+                    <option key={provider.provider_id} value={provider.company_name}>
+                      {provider.company_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <label className="overview-filter-field">
+              Job status
+              <select
+                value={filters.job_status}
+                onChange={(event) => updateFilter("job_status", event.target.value)}
+              >
+                <option value="">All</option>
+                <option value="open">open</option>
+                <option value="partially_filled">partially_filled</option>
+                <option value="filled">filled</option>
+                <option value="in_progress">in_progress</option>
+                <option value="completed">completed</option>
+                <option value="cancelled">cancelled</option>
+              </select>
+            </label>
+            <label className="overview-filter-field">
+              Payment status
+              <select
+                value={filters.payment_status}
+                onChange={(event) => updateFilter("payment_status", event.target.value)}
+              >
+                <option value="">All</option>
+                <option value="pending">pending</option>
+                <option value="part_paid">part_paid</option>
+                <option value="paid">paid</option>
+                <option value="overdue">overdue</option>
+                <option value="written_off">written_off</option>
+              </select>
+            </label>
+            <label className="overview-filter-field">
+              Broadcast status
+              <select
+                value={filters.broadcast_status}
+                onChange={(event) => updateFilter("broadcast_status", event.target.value)}
+              >
+                <option value="">All</option>
+                <option value="broadcast ready">broadcast ready</option>
+                <option value="awaiting response">awaiting response</option>
+                <option value="completed">completed</option>
+              </select>
+            </label>
+            <input type="hidden" name="status" value={filters.status} />
+            <div className="overview-filter-actions">
+              <button type="submit">Apply filters</button>
+              <button type="button" onClick={handleReset}>
+                Reset
+              </button>
+            </div>
+          </form>
+        </Collapsible.Content>
+      </Collapsible.Root>
 
       {!errorMessage && jobs.length === 0 ? <p>No jobs found for the current filter.</p> : null}
       {!errorMessage && jobs.length > 0 ? (

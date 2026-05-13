@@ -27,3 +27,6 @@ node_modules/
 .env
 .env.local
 .env.*.local
+.env.local.current-broken.*.bak
+.vercel
+.env*.local

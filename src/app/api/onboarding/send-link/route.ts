@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sendEmail } from "@/lib/email/sendEmail";
 import { buildOnboardingInviteEmail } from "@/lib/onboarding/buildOnboardingInviteEmail";
 import { getOnboardingLink } from "@/lib/onboarding/getOnboardingLink";
 
@@ -35,13 +36,20 @@ export async function POST(request: Request) {
       onboardingLink,
     });
 
+    const result = await sendEmail({
+      to: recipientEmail,
+      subject: email.subject,
+      html: email.html,
+      text: email.body,
+    });
+
     return NextResponse.json({
-      success: false,
+      success: true,
       channel,
       onboarding_link: onboardingLink,
-      subject: email.subject,
-      error: "Email sending is disabled because the Resend integration has been removed.",
-    }, { status: 501 });
+      provider: "resend",
+      result,
+    });
   } catch (error) {
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : "Failed to send onboarding link." },
