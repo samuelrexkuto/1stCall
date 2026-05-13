@@ -1008,17 +1008,33 @@
     gap: 1rem;
     padding: 0.85rem 1rem;
     border-bottom: 1px solid var(--rd-border);
+    border-bottom-left-radius: 22px;
+    border-bottom-right-radius: 22px;
     background: var(--rd-bg-elevated);
     color: var(--rd-text);
+    box-shadow: 0 12px 24px color-mix(in srgb, var(--rd-shadow-color, #111827) 10%, transparent);
   }
 
   .mobileMapCloseButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
     border: 1px solid var(--rd-border);
     border-radius: 999px;
-    padding: 0.48rem 0.8rem;
+    padding: 0;
     background: var(--rd-control-bg);
     color: var(--rd-text);
     font-weight: 800;
+    cursor: pointer;
+  }
+
+  .mobileMapCloseButton :global(svg) {
+    width: 20px;
+    height: 20px;
+    display: block;
   }
 
   .mobileMapOverlayBody {

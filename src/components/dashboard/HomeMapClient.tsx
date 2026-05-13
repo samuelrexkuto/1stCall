@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { useSearchParams } from "next/navigation";
 import { Cross2Icon, InfoCircledIcon } from "@radix-ui/react-icons";
-import { Callout, Checkbox, Flex, IconButton, Select, Skeleton, Text } from "@radix-ui/themes";
+import { Callout, Checkbox, Flex, Select, Skeleton, Text } from "@radix-ui/themes";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import {
   GooglePlacesAutocomplete,
@@ -1569,16 +1569,14 @@ export function HomeMapClient({
         <div className={styles.mobileMapOverlay} role="dialog" aria-modal="true" aria-label="Operations map">
           <div className={styles.mobileMapOverlayHeader}>
             <strong>Operations Map</strong>
-            <IconButton
+            <button
+              type="button"
               onClick={() => setMobileMapOpen(false)}
               aria-label="Close operations map"
               className={styles.mobileMapCloseButton}
-              variant="soft"
-              radius="full"
-              size="2"
             >
-              <Cross2Icon />
-            </IconButton>
+              <Cross2Icon aria-hidden="true" />
+            </button>
           </div>
           <div className={styles.mobileMapOverlayBody}>
             {renderMapCanvas()}

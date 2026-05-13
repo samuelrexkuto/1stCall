@@ -1,11 +1,34 @@
 import type { WorkerOverviewRow } from "@/lib/workers/types";
 
-export function WorkerPerformanceSummary({ worker }: { worker: WorkerOverviewRow }) {
+function formatDate(value?: string | null) {
+  if (!value) return "Not recorded";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+export function WorkerPerformanceSummary({
+  worker,
+  showExtendedFactors = false,
+}: {
+  worker: WorkerOverviewRow;
+  showExtendedFactors?: boolean;
+}) {
   const items = [
     { label: "Total jobs contributing to score", value: worker.statHubMeta.reviewedJobsCount ?? 0 },
     { label: "Platform jobs contributing to score", value: worker.statHubMeta.verifiedCompletedJobsCount ?? 0 },
     { label: "Off-platform jobs contributing to score", value: worker.statHubMeta.portfolioBackedJobsCount ?? 0 },
     { label: "Repeat-booked count", value: worker.statHubMeta.repeatBookedCount ?? worker.performanceSummary.repeatClientsCount ?? 0 },
+    ...(showExtendedFactors
+      ? [
+          { label: "No-show incidents", value: worker.performanceSummary.noShowIncidents ?? 0 },
+          { label: "Same-day cancellations", value: worker.performanceSummary.sameDayCancellations ?? 0 },
+          { label: "Last booking completed", value: formatDate(worker.performanceSummary.lastBookingCompletedAt) },
+          { label: "Next score release", value: formatDate(worker.stathub.nextReleaseAt) },
+        ]
+      : []),
   ];
 
   return (

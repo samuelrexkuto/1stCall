@@ -5377,6 +5377,11 @@ html[data-theme="light"] .rd-bottom-nav {
   color: #ffffff;
 }
 
+.rd-worker-grid-card-pill-accepted {
+  background: #16a34a;
+  color: #ffffff;
+}
+
 .rd-worker-grid-card-selector {
   position: absolute;
   right: 0.55rem;
@@ -5437,4 +5442,66 @@ html[data-theme="light"] .rd-bottom-nav {
   .rd-worker-grid-card-title {
     white-space: normal;
   }
+}
+
+/* Core information callout theme. The Operations Map callout remains the
+   reference layout; this class applies the same sizing and spacing to other
+   information callouts while using the soft blue Site Score colors. */
+.rd-info-callout {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) !important;
+  align-items: start !important;
+  gap: 0.85rem !important;
+  padding: 0.9rem 1rem !important;
+  border-radius: 18px !important;
+  border: 1px solid #d9dee8 !important;
+  background: #eef4ff !important;
+  color: #667085 !important;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.03) !important;
+}
+
+.rd-info-callout :where(.rt-CalloutIcon, svg) {
+  color: #365fd3 !important;
+  width: 18px;
+  height: 18px;
+}
+
+.rd-info-callout :where(.rt-CalloutText, p, span, div, a) {
+  color: #667085 !important;
+  background: transparent !important;
+  font-size: 0.95rem !important;
+  line-height: 1.45 !important;
+  font-weight: 500 !important;
+}
+
+.worker-detail-mobile-content .rd-info-callout,
+.worker-detail-mobile-content .job-detail-mobile-dynamic-card .rd-info-callout {
+  width: 100% !important;
+  max-width: none !important;
+  justify-self: stretch !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+  gap: 0.85rem !important;
+  padding: 0.9rem 1rem !important;
+  margin: 0 !important;
+  text-align: left !important;
+  border-radius: 18px !important;
+}
+
+.worker-detail-mobile-content .rd-info-callout :where(.rt-CalloutIcon),
+.worker-detail-mobile-content .job-detail-mobile-dynamic-card .rd-info-callout :where(.rt-CalloutIcon) {
+  flex: 0 0 auto !important;
+  margin-top: 0.12rem !important;
+}
+
+.worker-detail-mobile-content .rd-info-callout :where(.rt-CalloutText),
+.worker-detail-mobile-content .job-detail-mobile-dynamic-card .rd-info-callout :where(.rt-CalloutText) {
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  text-align: left !important;
+  font-size: 0.95rem !important;
+  line-height: 1.45 !important;
+  font-weight: 500 !important;
 }

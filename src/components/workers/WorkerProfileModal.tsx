@@ -11,8 +11,9 @@ import {
   PersonIcon,
   ReaderIcon,
   SewingPinIcon,
+  InfoCircledIcon,
 } from "@radix-ui/react-icons";
-import { Box, ScrollArea, Tabs } from "@radix-ui/themes";
+import { Box, Callout, ScrollArea, Tabs } from "@radix-ui/themes";
 import { useAuthSession } from "@/components/auth/AuthSessionProvider";
 import { Modal } from "@/components/ui/Modal";
 import { SaveWorkerButton } from "@/components/workers/SaveWorkerButton";
@@ -100,6 +101,7 @@ export function WorkerProfileModal({
   onBroadcast,
   mode = "admin",
   initialTab = "Site Score presented by StatHub",
+  revealContactDetails = false,
 }: {
   worker: WorkerOverviewRow | null;
   open: boolean;
@@ -107,6 +109,7 @@ export function WorkerProfileModal({
   onBroadcast?: (worker: WorkerOverviewRow) => void;
   mode?: "admin" | "job_provider";
   initialTab?: ProfileTab;
+  revealContactDetails?: boolean;
 }) {
   const { user } = useAuthSession();
   const [workerDocuments, setWorkerDocuments] = useState<WorkerDocument[]>([]);
@@ -115,7 +118,8 @@ export function WorkerProfileModal({
   const [activeTab, setActiveTab] = useState<ProfileTab>(initialTab);
   const [blockedMessage, setBlockedMessage] = useState("");
   const providerId = user?.providerId ?? "job-provider-local";
-  const isLimitedProviderView = mode === "job_provider" && user?.role === "job_provider";
+  const isProviderView = mode === "job_provider";
+  const isLimitedProviderView = isProviderView && user?.role === "job_provider" && !revealContactDetails;
   const accessSeed = useMemo(
     () =>
       buildProviderAccessSeed({
@@ -173,7 +177,7 @@ export function WorkerProfileModal({
   }, [accessSeed, isLimitedProviderView, open, providerId, worker]);
 
   useEffect(() => {
-    if (!worker || blockedMessage) {
+    if (!worker || blockedMessage || isProviderView) {
       setWorkerDocuments([]);
       setDocumentsLoading(false);
       setDocumentsError("");
@@ -214,14 +218,14 @@ export function WorkerProfileModal({
 
     void loadWorkerDocuments();
     return () => controller.abort();
-  }, [blockedMessage, worker]);
+  }, [blockedMessage, isProviderView, worker]);
 
   const profileTitle = worker
     ? isLimitedProviderView
       ? `${getWorkerDisplayGrouping(worker).typeLabel}: ${getProviderFacingDisplayName(worker)}`
       : `${getWorkerDisplayGrouping(worker).typeLabel}: ${worker.full_name}`
     : "Worker Details";
-  const profileTabs = isLimitedProviderView
+  const profileTabs = isProviderView
     ? baseProfileTabs.filter((tab) => tab !== "Documents")
     : baseProfileTabs;
 
@@ -418,10 +422,10 @@ export function WorkerProfileModal({
               }}
             >
               {activeTab === "Site Score presented by StatHub" ? <SiteScoreCard worker={worker} /> : null}
-              {activeTab === "Performance Summary" ? <WorkerPerformanceSummary worker={worker} /> : null}
+              {activeTab === "Performance Summary" ? <WorkerPerformanceSummary worker={worker} showExtendedFactors={mode === "job_provider"} /> : null}
               {activeTab === "Portfolio" ? <WorkerPortfolioSection worker={worker} /> : null}
               {activeTab === "Credentials / Compliance" ? <WorkerCredentialsComplianceSection worker={worker} /> : null}
-              {activeTab === "Documents" ? (
+              {mode === "admin" && activeTab === "Documents" ? (
                 <>
                   {documentsError ? <p style={{ margin: 0 }}>{documentsError}</p> : null}
                   {documentsLoading ? <p style={{ margin: 0 }}>Loading documents...</p> : null}
@@ -489,9 +493,12 @@ export function WorkerProfileModal({
                 <section className="job-detail-static-section">
                   <h3 className="job-detail-static-title">{grouping.typeLabel} Summary</h3>
                   {isLimitedProviderView ? (
-                    <p className="worker-detail-mobile-note">
-                      {limitedTitle}. Provider-side review keeps direct contact details and precise address masked until the platform coordinates the next stage.
-                    </p>
+                    <Callout.Root color="indigo" variant="soft" className="rd-info-callout">
+                      <Callout.Icon><InfoCircledIcon /></Callout.Icon>
+                      <Callout.Text>
+                        Provider-scoped workforce discovery with image-led results on one side and a live operational map on the other.
+                      </Callout.Text>
+                    </Callout.Root>
                   ) : null}
                   <WorkerDetailGrid className="job-detail-summary-grid" fields={detailItems} />
                 </section>
@@ -513,7 +520,7 @@ export function WorkerProfileModal({
                         <SiteScoreCard worker={worker} />
                       </Tabs.Content>
                       <Tabs.Content value="Performance Summary" className="job-detail-mobile-tab-content">
-                        <WorkerPerformanceSummary worker={worker} />
+                        <WorkerPerformanceSummary worker={worker} showExtendedFactors={mode === "job_provider"} />
                       </Tabs.Content>
                       <Tabs.Content value="Portfolio" className="job-detail-mobile-tab-content">
                         <WorkerPortfolioSection worker={worker} />
@@ -521,13 +528,15 @@ export function WorkerProfileModal({
                       <Tabs.Content value="Credentials / Compliance" className="job-detail-mobile-tab-content">
                         <WorkerCredentialsComplianceSection worker={worker} />
                       </Tabs.Content>
-                      <Tabs.Content value="Documents" className="job-detail-mobile-tab-content">
-                        {documentsError ? <p style={{ margin: 0 }}>{documentsError}</p> : null}
-                        {documentsLoading ? <p style={{ margin: 0 }}>Loading documents...</p> : null}
-                        {!documentsLoading && !documentsError ? (
-                          <WorkerDocumentsCarousel documents={workerDocuments} />
-                        ) : null}
-                      </Tabs.Content>
+                      {mode === "admin" ? (
+                        <Tabs.Content value="Documents" className="job-detail-mobile-tab-content">
+                          {documentsError ? <p style={{ margin: 0 }}>{documentsError}</p> : null}
+                          {documentsLoading ? <p style={{ margin: 0 }}>Loading documents...</p> : null}
+                          {!documentsLoading && !documentsError ? (
+                            <WorkerDocumentsCarousel documents={workerDocuments} />
+                          ) : null}
+                        </Tabs.Content>
+                      ) : null}
                     </Box>
                   </Tabs.Root>
                 </section>

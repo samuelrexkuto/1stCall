@@ -9,6 +9,41 @@ import {
 } from "@/lib/profileImages";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
+async function updateProviderImage(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  providerId: string,
+  patch: Record<string, string>,
+) {
+  const patchAttempts = [
+    patch,
+    { avatar_url: patch.avatar_url, avatar_path: patch.avatar_path },
+    { avatar_url: patch.avatar_url },
+    { profile_image_url: patch.profile_image_url, profile_image_path: patch.profile_image_path },
+    { profile_image_url: patch.profile_image_url },
+  ];
+  const filters = [
+    { column: "id", value: providerId },
+    { column: "provider_id", value: providerId },
+  ];
+
+  let lastError: { message?: string } | null = null;
+  for (const filter of filters) {
+    for (const patchAttempt of patchAttempts) {
+      const result = await supabase
+        .from("job_providers")
+        .update(patchAttempt)
+        .eq(filter.column, filter.value)
+        .select("id")
+        .maybeSingle();
+
+      if (!result.error && result.data) return result;
+      if (result.error) lastError = result.error;
+    }
+  }
+
+  return { data: null, error: lastError };
+}
+
 export async function POST(request: Request) {
   const currentUser = await getAppSessionUser();
   if (!currentUser || currentUser.role !== "job_provider" || !currentUser.providerId) {
@@ -31,14 +66,15 @@ export async function POST(request: Request) {
 
   const supabase = createAdminSupabaseClient();
   const extension = getProfileImageExtension(file);
-  const filePath = `${currentUser.providerId}/avatar.${extension}`;
+  const uploadVersion = Date.now();
+  const filePath = `${currentUser.providerId}/avatar-${uploadVersion}.${extension}`;
 
   const { error: uploadError } = await supabase.storage
     .from(PROFILE_IMAGE_BUCKET)
     .upload(filePath, file, {
       cacheControl: "3600",
       contentType: file.type,
-      upsert: true,
+      upsert: false,
     });
 
   if (uploadError) {
@@ -66,21 +102,7 @@ export async function POST(request: Request) {
     avatar_path: filePath,
   };
 
-  const primaryUpdate = await supabase
-    .from("job_providers")
-    .update(providerImagePatch)
-    .eq("id", currentUser.providerId)
-    .select("id")
-    .maybeSingle();
-
-  const providerUpdate = !primaryUpdate.error && primaryUpdate.data
-    ? primaryUpdate
-    : await supabase
-      .from("job_providers")
-      .update(providerImagePatch)
-      .eq("provider_id", currentUser.providerId)
-      .select("id")
-      .maybeSingle();
+  const providerUpdate = await updateProviderImage(supabase, currentUser.providerId, providerImagePatch);
 
   if (providerUpdate.error || !providerUpdate.data) {
     return NextResponse.json(

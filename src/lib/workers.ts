@@ -576,6 +576,18 @@ export async function loadWorkersOverview(
   return { workers: enrichedWorkers };
 }
 
+export async function loadWorkerOverviewById(workerId: string): Promise<WorkerOverviewRow | null> {
+  const payload = await loadWorkersOverview({
+    name: "",
+    worker_type: "",
+    primary_role: "",
+    location: "",
+    available_today: "",
+  });
+
+  return payload.workers.find((worker) => worker.worker_id === workerId) ?? null;
+}
+
 export function mapJobsToDispatchOptions(jobs: Array<{
   job_id: string;
   provider_id?: string | null;

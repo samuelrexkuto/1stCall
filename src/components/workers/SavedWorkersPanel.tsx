@@ -63,6 +63,7 @@ export function SavedWorkersPanel({
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const providerId = providerAccessSeed?.providerId ?? user?.providerId ?? "job-provider-local";
   const isJobProvider = mode === "job_provider" && user?.role === "job_provider";
+  const savedWorkersUserId = isJobProvider ? providerId : user?.role === "admin" ? undefined : null;
   const accessSeed = useMemo(
     () =>
       buildProviderAccessSeed(
@@ -110,14 +111,19 @@ export function SavedWorkersPanel({
   );
 
   useEffect(() => {
-    const nextRecords = readSavedWorkers({ userId: isJobProvider ? providerId : undefined });
+    if (savedWorkersUserId === null) {
+      setRecords([]);
+      return;
+    }
+
+    const nextRecords = readSavedWorkers({ userId: savedWorkersUserId });
     setRecords(nextRecords);
     if (isJobProvider) {
       syncSavedShortlistCount(providerId, nextRecords.length, accessSeed);
     }
 
     function syncSavedWorkers() {
-      const updatedRecords = readSavedWorkers({ userId: isJobProvider ? providerId : undefined });
+      const updatedRecords = readSavedWorkers({ userId: savedWorkersUserId });
       setRecords(updatedRecords);
       if (isJobProvider) {
         syncSavedShortlistCount(providerId, updatedRecords.length, accessSeed);
@@ -126,7 +132,7 @@ export function SavedWorkersPanel({
 
     window.addEventListener(SAVED_WORKERS_UPDATED_EVENT, syncSavedWorkers);
     return () => window.removeEventListener(SAVED_WORKERS_UPDATED_EVENT, syncSavedWorkers);
-  }, [accessSeed, isJobProvider, providerId]);
+  }, [accessSeed, isJobProvider, providerId, savedWorkersUserId]);
 
   const workers = useMemo(() => {
     const latestById = new Map(latestWorkers.map((worker) => [worker.worker_id, worker]));

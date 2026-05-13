@@ -7,7 +7,7 @@ const ASSIGNMENT_SELECT =
 const ASSIGNMENT_FALLBACK_SELECT =
   "id, job_id, worker_id, provider_id, requested_by_client, requested_by_client_at, requested_rank, payment_cycle, payment_status, created_at";
 const WORKER_SELECT =
-  "id, full_name, phone, email, primary_role, location_display, town, postcode";
+  "id, full_name, phone, email, primary_role, location_display, town, postcode, profile_image_url, avatar_url, card_image_url";
 const WORKER_FALLBACK_SELECT =
   "id, full_name, primary_role, town, postcode";
 
@@ -120,6 +120,34 @@ async function loadWorkersById(supabase: SupabaseAdminClient, workerIds: string[
   );
 }
 
+async function loadWorkerImagesById(supabase: SupabaseAdminClient, workerIds: string[]) {
+  if (workerIds.length === 0) return new Map<string, string>();
+
+  const imageByWorkerId = new Map<string, string>();
+  const { data, error } = await supabase
+    .from("worker_documents")
+    .select("worker_id, file_url, mime_type, file_name, created_at")
+    .in("worker_id", workerIds)
+    .eq("document_type", "portfolio")
+    .not("file_url", "is", null)
+    .order("created_at", { ascending: false });
+
+  if (error) return imageByWorkerId;
+
+  for (const row of data ?? []) {
+    const workerId = String(row.worker_id);
+    if (imageByWorkerId.has(workerId)) continue;
+    const fileUrl = typeof row.file_url === "string" ? row.file_url : "";
+    const mimeType = typeof row.mime_type === "string" ? row.mime_type : "";
+    const fileName = typeof row.file_name === "string" ? row.file_name : "";
+    if (fileUrl && (mimeType.startsWith("image/") || /\.(png|jpe?g|webp|gif|bmp|svg)$/i.test(fileName))) {
+      imageByWorkerId.set(workerId, fileUrl);
+    }
+  }
+
+  return imageByWorkerId;
+}
+
 export async function loadRequestedWorkforceForJob(
   supabase: SupabaseAdminClient,
   jobId: string,
@@ -127,10 +155,13 @@ export async function loadRequestedWorkforceForJob(
 ): Promise<RequestedWorkforceRecord[]> {
   const assignments = await loadAssignments(supabase, jobId);
   const workerIds = assignments.map((row) => String(row.worker_id)).filter(Boolean);
-  const workerById = await loadWorkersById(supabase, [...new Set(workerIds)]);
+  const uniqueWorkerIds = [...new Set(workerIds)];
+  const workerById = await loadWorkersById(supabase, uniqueWorkerIds);
+  const workerImageById = await loadWorkerImagesById(supabase, uniqueWorkerIds);
 
   return assignments.map((assignment, index) => {
     const worker = workerById.get(String(assignment.worker_id)) ?? {};
+    const workerId = String(assignment.worker_id);
     const dispatchStatus = assignment.dispatch_status ?? "requested";
     const isAccepted = dispatchStatus === "accepted";
     const isAdmin = options.viewerRole === undefined || options.viewerRole === "admin";
@@ -147,8 +178,8 @@ export async function loadRequestedWorkforceForJob(
           : null;
 
     return {
-      id: String(assignment.worker_id),
-      workerId: String(assignment.worker_id),
+      id: workerId,
+      workerId,
       assignmentId: String(assignment.id),
       name:
         typeof worker.full_name === "string" && worker.full_name.trim()
@@ -161,7 +192,12 @@ export async function loadRequestedWorkforceForJob(
       phone: canExposeContactDetails && typeof worker.phone === "string" ? worker.phone : null,
       mobile: null,
       email: canExposeContactDetails && typeof worker.email === "string" ? worker.email : null,
-      avatarUrl: null,
+      avatarUrl:
+        (typeof worker.profile_image_url === "string" && worker.profile_image_url) ||
+        (typeof worker.avatar_url === "string" && worker.avatar_url) ||
+        (typeof worker.card_image_url === "string" && worker.card_image_url) ||
+        workerImageById.get(workerId) ||
+        null,
       requestedRank: assignment.requested_rank ?? index + 1,
       requestedByClient: true,
       requestedAt: assignment.requested_by_client_at ?? assignment.created_at ?? null,

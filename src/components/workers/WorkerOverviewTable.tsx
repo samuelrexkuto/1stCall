@@ -58,6 +58,8 @@ export function WorkerOverviewTable({
   const [compareModalOpen, setCompareModalOpen] = useState(false);
   const [selectionMessage, setSelectionMessage] = useState("");
   const [liveProviderAccessSeed, setLiveProviderAccessSeed] = useState(providerAccessSeed);
+  const [availabilityByWorkerId, setAvailabilityByWorkerId] = useState<Record<string, boolean>>({});
+  const [availabilityUpdatingId, setAvailabilityUpdatingId] = useState<string | null>(null);
   const providerId = liveProviderAccessSeed?.providerId ?? providerAccessSeed?.providerId ?? user?.providerId ?? "job-provider-local";
   const isJobProvider = mode === "job_provider" && user?.role === "job_provider";
   const accessSeed = buildProviderAccessSeed(
@@ -252,8 +254,33 @@ export function WorkerOverviewTable({
         unique.set(key, worker);
       }
     }
-    return Array.from(unique.values());
-  }, [workers]);
+    return Array.from(unique.values()).map((worker) => ({
+      ...worker,
+      available_today: availabilityByWorkerId[worker.worker_id] ?? worker.available_today,
+    }));
+  }, [availabilityByWorkerId, workers]);
+
+  async function updateWorkerAvailability(worker: WorkerOverviewRow, availableToday: boolean) {
+    if (!canMutateWorkers) return;
+    setAvailabilityUpdatingId(worker.worker_id);
+    setSelectionMessage("");
+
+    const response = await fetch(`/api/workers/${worker.worker_id}/availability`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ available_today: availableToday }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    setAvailabilityUpdatingId(null);
+
+    if (!response.ok || !payload.success) {
+      setSelectionMessage(payload.error ?? "Unable to update availability.");
+      return;
+    }
+
+    setAvailabilityByWorkerId((current) => ({ ...current, [worker.worker_id]: availableToday }));
+    router.refresh();
+  }
 
   return (
     <>
@@ -436,7 +463,17 @@ export function WorkerOverviewTable({
                     : worker.location_display ?? `${worker.town ?? "-"} / ${worker.postcode}`}
                 </td>
                 <td style={{ padding: "0.75rem", borderBottom: "1px solid var(--rd-border)" }}>
-                  {worker.available_today ? "Yes" : "Project committed"}
+                  {canMutateWorkers ? (
+                    <select
+                      value={worker.available_today ? "true" : "false"}
+                      disabled={availabilityUpdatingId === worker.worker_id}
+                      onChange={(event) => updateWorkerAvailability(worker, event.target.value === "true")}
+                      aria-label={`Update availability for ${worker.full_name}`}
+                    >
+                      <option value="true">Available</option>
+                      <option value="false">Project committed</option>
+                    </select>
+                  ) : worker.available_today ? "Yes" : "Project committed"}
                 </td>
                 <td style={{ padding: "0.75rem", borderBottom: "1px solid var(--rd-border)" }}>
                   {worker.stathub.status === "insufficient"
@@ -547,7 +584,19 @@ export function WorkerOverviewTable({
                         ? getProviderFacingLocationLabel(worker)
                         : worker.location_display ?? `${worker.town ?? "-"} / ${worker.postcode}`}
                     </Table.Cell>
-                    <Table.Cell>{worker.available_today ? "Yes" : "Project committed"}</Table.Cell>
+                    <Table.Cell>
+                      {canMutateWorkers ? (
+                        <select
+                          value={worker.available_today ? "true" : "false"}
+                          disabled={availabilityUpdatingId === worker.worker_id}
+                          onChange={(event) => updateWorkerAvailability(worker, event.target.value === "true")}
+                          aria-label={`Update availability for ${worker.full_name}`}
+                        >
+                          <option value="true">Available</option>
+                          <option value="false">Project committed</option>
+                        </select>
+                      ) : worker.available_today ? "Yes" : "Project committed"}
+                    </Table.Cell>
                     <Table.Cell>
                       {worker.stathub.status === "insufficient"
                         ? getSiteScoreStatusLabel(worker.stathub.status)

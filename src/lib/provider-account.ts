@@ -157,6 +157,8 @@ async function loadProjectManagementAccessOverlay(
   providerEmail: string | null,
 ) {
   const selects = [
+    "id, provider_id, name, email, profile_image_url, profile_image_path, avatar_url, avatar_path, account_tier, access_tier, access_status, access_updated_at, access_updated_by, access_notes, admin_full_access, trial_access, trial_status, trial_access_level, trial_start_date, trial_end_date, trial_granted_by, trial_granted_at, trial_notes, dispatch_allowance_remaining, dispatch_access_source",
+    "id, provider_id, name, email, profile_image_url, profile_image_path, account_tier, access_tier, access_status, access_updated_at, access_updated_by, access_notes, admin_full_access, trial_access, trial_status, trial_access_level, trial_start_date, trial_end_date, trial_granted_by, trial_granted_at, trial_notes, dispatch_allowance_remaining, dispatch_access_source",
     "id, provider_id, name, email, account_tier, access_tier, access_status, access_updated_at, access_updated_by, access_notes, admin_full_access, trial_access, trial_status, trial_access_level, trial_start_date, trial_end_date, trial_granted_by, trial_granted_at, trial_notes, dispatch_allowance_remaining, dispatch_access_source",
     "id, provider_id, name, email",
   ] as const;
@@ -197,6 +199,10 @@ function mergeProjectManagementAccess(
   for (const key of [
     "name",
     "email",
+    "profile_image_url",
+    "profile_image_path",
+    "avatar_url",
+    "avatar_path",
     "account_tier",
     "access_tier",
     "access_status",

@@ -15,7 +15,7 @@ import {
   ReaderIcon,
   SewingPinIcon,
 } from "@radix-ui/react-icons";
-import { Box, Checkbox, ScrollArea, Table, Tabs } from "@radix-ui/themes";
+import { Box, Button, Checkbox, ScrollArea, Table, Tabs } from "@radix-ui/themes";
 import { InvoiceEmailModal } from "@/components/jobs/InvoiceEmailModal";
 import { BroadcastModal, type BroadcastJobOption } from "@/components/messaging/BroadcastModal";
 import { Modal } from "@/components/ui/Modal";
@@ -335,6 +335,12 @@ function getAcceptedStatus(worker: NormalisedRequestedWorkforce | AcceptedWorkfo
   const anyWorker = worker as any;
   const status = anyWorker.assignment_status || anyWorker.dispatchStatus || anyWorker.dispatch_status;
   return ["accepted", "confirmed", "selected_for_release", "released_to_client"].includes(status) ? "Accepted" : "Accepted";
+}
+
+function hasAcceptedStatus(worker: NormalisedRequestedWorkforce | AcceptedWorkforceRow) {
+  const anyWorker = worker as any;
+  const status = anyWorker.assignment_status || anyWorker.dispatchStatus || anyWorker.dispatch_status;
+  return ["accepted", "confirmed", "selected_for_release", "released_to_client"].includes(String(status ?? ""));
 }
 
 function buildProfileWorkerFromMatch(worker: MatchingWorker): WorkerOverviewRow {
@@ -1220,6 +1226,7 @@ export function JobDetailModal({
   const [requestedStatusError, setRequestedStatusError] = useState("");
   const [selectedAcceptedWorker, setSelectedAcceptedWorker] = useState<NormalisedRequestedWorkforce | null>(null);
   const [selectedProfileWorker, setSelectedProfileWorker] = useState<WorkerOverviewRow | null>(null);
+  const [selectedProfileRevealsContact, setSelectedProfileRevealsContact] = useState(false);
   const [requestedDispatchRecipients, setRequestedDispatchRecipients] = useState<Array<{
     id: string;
     name: string;
@@ -1261,6 +1268,7 @@ export function JobDetailModal({
     setRequestedStatusError("");
     setSelectedAcceptedWorker(null);
     setSelectedProfileWorker(null);
+    setSelectedProfileRevealsContact(false);
   }, [activeJob?.job_id, open]);
 
   useEffect(() => {
@@ -1632,6 +1640,25 @@ export function JobDetailModal({
     setSelectedAcceptedWorker(worker);
   }
 
+  async function openWorkerProfile(workerId: string | null | undefined, fallback: WorkerOverviewRow, revealContactDetails = false) {
+    setSelectedProfileRevealsContact(revealContactDetails);
+    setSelectedProfileWorker(fallback);
+
+    if (!workerId) return;
+
+    try {
+      const response = await fetch(`/api/workers/${workerId}`, { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok && payload?.success && payload.worker) {
+        setSelectedProfileWorker(payload.worker as WorkerOverviewRow);
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[JobDetailModal] failed to hydrate worker profile", error);
+      }
+    }
+  }
+
   async function completeBroadcastAndReleaseDetails() {
     if (!activeJob) return;
     if (acceptedWorkers.length === 0) {
@@ -1950,6 +1977,7 @@ export function JobDetailModal({
               matchPill={formatPercentMatch(worker.match_strength)}
               selectable={selectable}
               selected={selected}
+              selectButtonBelow
               onToggleSelected={() => {
                 if (!workerId) return;
                 setRequestedSelectionIds((current) =>
@@ -1959,7 +1987,9 @@ export function JobDetailModal({
                 );
                 setRequestedSaveMessage("");
               }}
-              onOpenProfile={() => setSelectedProfileWorker(buildProfileWorkerFromMatch(worker))}
+              onOpenProfile={() => {
+                void openWorkerProfile(workerId, buildProfileWorkerFromMatch(worker), false);
+              }}
             />
           );
         };
@@ -1972,38 +2002,21 @@ export function JobDetailModal({
         const requiredSkillsText = formatListValue(skillsRequired.length ? skillsRequired : normaliseToArray(activeJob.requirements));
         const skillsContent = (
           <div style={{ display: "grid", gap: "0.9rem" }}>
-            <section style={{ display: "grid", gap: "0.35rem" }}>
-              <h4 style={{ margin: 0, fontSize: "0.95rem" }}>Job brief / description</h4>
-              <p style={{ margin: 0, color: "var(--rd-text-muted)", lineHeight: 1.5 }}>
-                {jobBrief || "No job description provided."}
-              </p>
-            </section>
-            <section style={{ display: "grid", gap: "0.35rem" }}>
-              <h4 style={{ margin: 0, fontSize: "0.95rem" }}>Skills required</h4>
-              <p style={{ margin: 0, color: "var(--rd-text-muted)", lineHeight: 1.5 }}>
-                {requiredSkillsText || "No specific skills listed."}
-              </p>
-              {additionalSkillTags.length > 0 ? (
-                <p style={{ margin: 0, color: "var(--rd-text-muted)" }}>
-                  <strong>Skill tags:</strong> {formatListValue(additionalSkillTags)}
-                </p>
-              ) : null}
-            </section>
-            <section style={{ display: "grid", gap: "0.45rem" }}>
-              <h4 style={{ margin: 0, fontSize: "0.95rem" }}>Compliance / tickets</h4>
-              <DetailGrid
-                fields={[
-                  ["CSCS Required", formatCscsRequired(activeJob)],
-                  ["PPE Required", activeJob.ppe_required ? activeJob.ppe_detail ?? "PPE required" : formatBooleanValue(activeJob.ppe_required)],
-                  ["DBS Required", formatDbsRequired(activeJob)],
-                  ["IPAF Required", formatBooleanValue(activeJob.ipaf_required)],
-                  ["Tools Required", formatBooleanValue(activeJob.own_tools_required)],
-                  ["Tools Detail", activeJob.tools_required],
-                  ["Certificates Required", formatListValue(activeJob.certificates_required)],
-                  ["Shift Pattern", activeJob.shift_pattern],
-                ]}
-              />
-            </section>
+            <DetailGrid
+              fields={[
+                ["Job brief / description", jobBrief || "No notes added or no description provided."],
+                ["Skills required", requiredSkillsText || "No specific skills listed."],
+                ...(additionalSkillTags.length > 0 ? [["Skill tags", formatListValue(additionalSkillTags)] as [string, string | number | boolean | null | undefined]] : []),
+                ["CSCS Required", formatCscsRequired(activeJob)],
+                ["PPE Required", activeJob.ppe_required ? activeJob.ppe_detail ?? "PPE required" : formatBooleanValue(activeJob.ppe_required)],
+                ["DBS Required", formatDbsRequired(activeJob)],
+                ["IPAF Required", formatBooleanValue(activeJob.ipaf_required)],
+                ["Tools Required", formatBooleanValue(activeJob.own_tools_required)],
+                ["Tools Detail", activeJob.tools_required],
+                ["Certificates Required", formatListValue(activeJob.certificates_required)],
+                ["Shift Pattern", activeJob.shift_pattern],
+              ]}
+            />
           </div>
         );
         const invoiceContent = (
@@ -2064,6 +2077,7 @@ export function JobDetailModal({
                   const workerId = getRequestedWorkerId(worker);
                   const dispatchStatus = worker.dispatchStatus || worker.dispatch_status || "requested";
                   const canViewAcceptedWorkerDetails = !isAdmin && dispatchStatus === "accepted";
+                  const accepted = hasAcceptedStatus(worker);
                   return (
                     <WorkerGridCard
                       key={workerId ?? worker.id}
@@ -2072,10 +2086,10 @@ export function JobDetailModal({
                       role={worker.primaryRole || worker.workforceType}
                       location={locationLabel || "Location TBC"}
                       pill={getAcceptedStatus(worker)}
-                      matchPill={formatPercentMatch(worker.matchPercentage)}
+                      matchPill={accepted ? null : formatPercentMatch(worker.matchPercentage)}
                       onOpenProfile={() => {
                         // TODO: replace this lightweight profile adapter with full worker row hydration when the job detail endpoint returns complete profile data.
-                        setSelectedProfileWorker(buildProfileWorkerFromMatch({
+                        const fallbackProfile = buildProfileWorkerFromMatch({
                           worker_id: workerId ?? worker.id,
                           full_name: worker.name,
                           phone: worker.phone,
@@ -2097,12 +2111,15 @@ export function JobDetailModal({
                           match_strength: worker.matchPercentage ?? undefined,
                           card_image_url: worker.avatarUrl ?? undefined,
                           profile_image_url: worker.avatarUrl ?? undefined,
-                        }));
+                        });
+                        void openWorkerProfile(workerId ?? worker.id, fallbackProfile, canViewAcceptedWorkerDetails);
                       }}
                       footerAction={
                         !isAdmin ? (
-                          <button
+                          <Button
                             type="button"
+                            color="indigo"
+                            variant="soft"
                             disabled={!canViewAcceptedWorkerDetails}
                             onClick={() => {
                               if (canViewAcceptedWorkerDetails) openAcceptedWorkerDetails(worker);
@@ -2110,7 +2127,7 @@ export function JobDetailModal({
                             title={!canViewAcceptedWorkerDetails ? "Contact details available after admin completion." : undefined}
                           >
                             {canViewAcceptedWorkerDetails ? "View contact details" : "Contact details available after admin completion."}
-                          </button>
+                          </Button>
                         ) : null
                       }
                     />
@@ -2211,9 +2228,9 @@ export function JobDetailModal({
                 </section>
                 {!isAdmin ? (
                   <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
-                    <button type="button" onClick={saveProviderRequestedWorkers} disabled={requestedSaveBusy}>
+                    <Button type="button" color="indigo" variant="soft" onClick={saveProviderRequestedWorkers} disabled={requestedSaveBusy}>
                       {requestedSaveBusy ? "Saving..." : `Request selected (${requestedSelectionIds.length})`}
-                    </button>
+                    </Button>
                     {requestedSaveMessage ? (
                       <span style={{ color: requestedSaveMessage.includes("saved") ? "#166534" : "#b45309", fontWeight: 600 }}>
                         {requestedSaveMessage}
@@ -2491,26 +2508,21 @@ export function JobDetailModal({
                             </select>
                           </label>
                         ) : canViewAcceptedWorkerDetails ? (
-                          <button
+                          <Button
                             type="button"
+                            color="indigo"
+                            variant="soft"
                             onClick={(event) => {
                               event.stopPropagation();
                               openAcceptedWorkerDetails(worker);
                             }}
                             style={{
                               width: "fit-content",
-                              border: "1px solid var(--rd-border)",
-                              borderRadius: 999,
-                              padding: "0.45rem 0.8rem",
-                              background: "var(--rd-bg-elevated)",
-                              color: "var(--rd-text)",
-                              fontWeight: 700,
-                              cursor: "pointer",
                               marginTop: "0.75rem",
                             }}
                           >
                             View contact details
-                          </button>
+                          </Button>
                         ) : (
                           <p style={{ margin: "0.65rem 0 0", color: "var(--rd-text-muted)", fontWeight: 600 }}>
                             Contact details will be released once the worker accepts.
@@ -2661,13 +2673,15 @@ export function JobDetailModal({
                     </section>
                     {!isAdmin ? (
                       <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
-                        <button
+                        <Button
                           type="button"
+                          color="indigo"
+                          variant="soft"
                           onClick={saveProviderRequestedWorkers}
                           disabled={requestedSaveBusy}
                         >
                           {requestedSaveBusy ? "Saving request..." : `Request selected workforce (${requestedSelectionIds.length})`}
-                        </button>
+                        </Button>
                         {requestedSaveMessage ? (
                           <span style={{ color: requestedSaveMessage.includes("saved") ? "#166534" : "#b45309", fontWeight: 600 }}>
                             {requestedSaveMessage}
@@ -2752,8 +2766,12 @@ export function JobDetailModal({
       <WorkerProfileModal
         worker={selectedProfileWorker}
         open={Boolean(selectedProfileWorker)}
-        onClose={() => setSelectedProfileWorker(null)}
+        onClose={() => {
+          setSelectedProfileWorker(null);
+          setSelectedProfileRevealsContact(false);
+        }}
         mode={mode}
+        revealContactDetails={selectedProfileRevealsContact}
       />
     </Modal>
   );

@@ -1,3 +1,5 @@
+import { InfoCircledIcon } from "@radix-ui/react-icons";
+import { Callout } from "@radix-ui/themes";
 import type { WorkerOverviewRow, WorkerStatHubData } from "@/lib/workers/types";
 
 function formatReleaseDate(value: string | null) {
@@ -63,14 +65,14 @@ export function SiteScoreCard({ worker }: { worker: WorkerOverviewRow }) {
       <p style={{ margin: 0, color: "var(--rd-text-muted)" }}>
         <strong>Next score release date:</strong> {formatReleaseDate(stathub.nextReleaseAt)}
       </p>
-      <div style={{ display: "grid", gap: "0.45rem", color: "var(--rd-text-muted)" }}>
-        <p style={{ margin: 0 }}>
+      <Callout.Root color="indigo" variant="soft" className="rd-info-callout">
+        <Callout.Icon><InfoCircledIcon /></Callout.Icon>
+        <Callout.Text>
           A credible public Site Score begins after 3 verified completed platform jobs with valid review data.
-        </p>
-        <p style={{ margin: 0 }}>
+          {" "}
           Until then, score confidence is still building through direct review activity and portfolio-backed proof.
-        </p>
-      </div>
+        </Callout.Text>
+      </Callout.Root>
     </section>
   );
 }

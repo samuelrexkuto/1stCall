@@ -9,6 +9,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { deriveWhatsappNumber, normalizeUkPhoneNumber } from "@/lib/phone";
 import { createWorkerSchema } from "@/lib/validation/schemas";
 import { WORKER_DOCUMENT_BUCKET } from "@/lib/worker-documents";
+import { loadWorkerOverviewById } from "@/lib/workers";
 import { getWorkerReadiness } from "@/lib/workers/getWorkerReadiness";
 
 function mapWorker(worker: Record<string, unknown>) {
@@ -56,6 +57,25 @@ function mapWorker(worker: Record<string, unknown>) {
     reliability_score: 0,
     created_at: String(worker.created_at ?? ""),
   };
+}
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ workerId: string }> },
+) {
+  const { workerId } = await params;
+
+  try {
+    const worker = await loadWorkerOverviewById(workerId);
+    if (!worker) {
+      return NextResponse.json({ success: false, error: "Worker not found." }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, worker });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to load worker.";
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
 }
 
 export async function PATCH(

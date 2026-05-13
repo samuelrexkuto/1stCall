@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Button } from "@radix-ui/themes";
 
 export function WorkerGridCard({
   imageUrl,
@@ -14,6 +15,7 @@ export function WorkerGridCard({
   onToggleSelected,
   onOpenProfile,
   footerAction,
+  selectButtonBelow = false,
 }: {
   imageUrl: string;
   name: string;
@@ -26,6 +28,7 @@ export function WorkerGridCard({
   onToggleSelected?: () => void;
   onOpenProfile?: () => void;
   footerAction?: ReactNode;
+  selectButtonBelow?: boolean;
 }) {
   return (
     <article
@@ -43,10 +46,14 @@ export function WorkerGridCard({
       <div className="rd-worker-grid-card-image-wrap">
         <img src={imageUrl} alt={name} loading="lazy" className="rd-worker-grid-card-image" />
         <div className="rd-worker-grid-card-meta">
-          {pill ? <span className="rd-worker-grid-card-pill">{pill}</span> : <span />}
+          {pill ? (
+            <span className={`rd-worker-grid-card-pill${pill.toLowerCase() === "accepted" ? " rd-worker-grid-card-pill-accepted" : ""}`}>
+              {pill}
+            </span>
+          ) : <span />}
           {matchPill ? <span className="rd-worker-grid-card-pill rd-worker-grid-card-pill-strong">{matchPill}</span> : null}
         </div>
-        {selectable ? (
+        {selectable && !selectButtonBelow ? (
           <button
             type="button"
             className="rd-worker-grid-card-selector"
@@ -64,6 +71,19 @@ export function WorkerGridCard({
         <strong className="rd-worker-grid-card-title">{name}</strong>
         {role ? <span className="rd-worker-grid-card-detail">{role}</span> : null}
         {location ? <span className="rd-worker-grid-card-detail">{location}</span> : null}
+        {selectable && selectButtonBelow ? (
+          <Button
+            type="button"
+            color="indigo"
+            variant="soft"
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleSelected?.();
+            }}
+          >
+            {selected ? "Selected" : "Select"}
+          </Button>
+        ) : null}
         {footerAction ? (
           <div
             className="rd-worker-grid-card-footer"
